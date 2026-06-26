@@ -21,6 +21,12 @@ import {
   sendMessage as apiSendMessage,
   submitQuote,
   updateSupplier as apiUpdateSupplier,
+  saveTrades as apiSaveTrades,
+  saveServiceAreas as apiSaveServiceAreas,
+  saveLanguage as apiSaveLanguage,
+  addDocument as apiAddDocument,
+  submitVerification as apiSubmitVerification,
+  completeOnboarding as apiCompleteOnboarding,
   uploadFile,
   type ApiConversation,
   type ApiEarnings,
@@ -97,8 +103,8 @@ type AppState = {
   selectedAreas: string[];
   businessName: string;
   tradeLicenseNumber: string;
-  bankIban: string;
-  accountHolder: string;
+  verificationStatus: ApiSupplier["verification_status"];
+  licenseDocUrl: string | null;
   jobs: ProviderJob[];
   activeJobs: ActiveJob[];
   conversations: ConversationItem[];
@@ -123,7 +129,7 @@ type Action =
   | { type: "toggleTrade"; tradeKey: string }
   | { type: "toggleArea"; area: string }
   | { type: "updateBusiness"; businessName: string; tradeLicenseNumber: string }
-  | { type: "updateBank"; bankIban: string; accountHolder: string }
+  | { type: "setLicenseDoc"; url: string }
   | { type: "setJobs"; jobs: ProviderJob[] }
   | { type: "setActiveJobs"; jobs: ActiveJob[] }
   | { type: "setEarnings"; earnings: EarningsState }
@@ -147,12 +153,12 @@ const initialState: AppState = {
   provider,
   supplierId: "",
   phone: "",
-  selectedTradeKeys: ["painting", "cleaning"],
-  selectedAreas: ["Dubai Marina", "Palm Jumeirah", "Downtown Dubai"],
-  businessName: "Rashid Pro Services",
+  selectedTradeKeys: [],
+  selectedAreas: [],
+  businessName: "",
   tradeLicenseNumber: "",
-  bankIban: "",
-  accountHolder: provider.name,
+  verificationStatus: "draft",
+  licenseDocUrl: null,
   jobs: initialJobs.map((job, index) => ({
     ...job,
     status: "new",
@@ -241,7 +247,7 @@ function mapSupplier(supplier: ApiSupplier, currentProvider: typeof provider) {
     plan: supplier.plan,
     rating: supplier.rating,
     revealsLeft: supplier.reveals_remaining,
-    services: [supplier.trade],
+    services: supplier.trades,
     icon: provider.icon,
   };
 }
@@ -312,10 +318,11 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         supplierId: action.supplier.id,
         phone: action.supplier.phone,
-        selectedAreas: action.supplier.coverage_areas.length ? action.supplier.coverage_areas : state.selectedAreas,
-        selectedTradeKeys: action.supplier.trade ? [action.supplier.trade] : state.selectedTradeKeys,
-        businessName: action.supplier.full_name,
-        accountHolder: action.supplier.full_name,
+        selectedAreas: action.supplier.coverage_areas,
+        selectedTradeKeys: action.supplier.trades,
+        businessName: action.supplier.business_name,
+        tradeLicenseNumber: action.supplier.trade_license_number,
+        verificationStatus: action.supplier.verification_status,
         provider: mapSupplier(action.supplier, state.provider),
         revealCredits: action.supplier.reveals_remaining,
       };
@@ -339,12 +346,8 @@ function reducer(state: AppState, action: Action): AppState {
         businessName: action.businessName,
         tradeLicenseNumber: action.tradeLicenseNumber,
       };
-    case "updateBank":
-      return {
-        ...state,
-        bankIban: action.bankIban,
-        accountHolder: action.accountHolder,
-      };
+    case "setLicenseDoc":
+      return { ...state, licenseDocUrl: action.url };
     case "setJobs":
       return { ...state, jobs: action.jobs };
     case "setActiveJobs":
@@ -451,7 +454,12 @@ type AppStateContextValue = {
   toggleTrade: (tradeKey: string) => void;
   toggleArea: (area: string) => void;
   updateBusiness: (businessName: string, tradeLicenseNumber: string) => void;
-  updateBank: (bankIban: string, accountHolder: string) => void;
+  saveTrades: () => Promise<void>;
+  saveAreas: () => Promise<void>;
+  saveBusiness: (businessName: string, tradeLicenseNumber: string) => Promise<void>;
+  uploadLicense: (uri: string, contentType?: string) => Promise<void>;
+  submitVerification: () => Promise<ApiSupplier>;
+  completeOnboarding: () => Promise<void>;
   sendQuote: (jobId: string, amount: number) => void;
   revealPrice: (jobId: string) => boolean;
   buyCredits: (amount: number) => void;
@@ -541,14 +549,46 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       toggleTrade: (tradeKey) => dispatch({ type: "toggleTrade", tradeKey }),
       toggleArea: (area) => dispatch({ type: "toggleArea", area }),
       updateBusiness: (businessName, tradeLicenseNumber) =>
-        {
-          dispatch({ type: "updateBusiness", businessName, tradeLicenseNumber });
-          ensureSession()
-            .then(() => apiUpdateSupplier({ full_name: businessName }))
-            .then((supplier) => dispatch({ type: "setSupplier", supplier }))
-            .catch(() => undefined);
-        },
-      updateBank: (bankIban, accountHolder) => dispatch({ type: "updateBank", bankIban, accountHolder }),
+        dispatch({ type: "updateBusiness", businessName, tradeLicenseNumber }),
+      saveTrades: async () => {
+        await ensureSession();
+        const supplier = await apiSaveTrades(state.selectedTradeKeys);
+        dispatch({ type: "setSupplier", supplier });
+      },
+      saveAreas: async () => {
+        await ensureSession();
+        const supplier = await apiSaveServiceAreas(state.selectedAreas);
+        dispatch({ type: "setSupplier", supplier });
+      },
+      saveBusiness: async (businessName, tradeLicenseNumber) => {
+        dispatch({ type: "updateBusiness", businessName, tradeLicenseNumber });
+        await ensureSession();
+        await apiUpdateSupplier({ business_name: businessName, trade_license_number: tradeLicenseNumber });
+        if (state.language) await apiSaveLanguage(state.language).catch(() => undefined);
+        const supplier = await getSupplier();
+        dispatch({ type: "setSupplier", supplier });
+      },
+      uploadLicense: async (uri, contentType = "image/jpeg") => {
+        await ensureSession();
+        const { public_url, storage_key } = await uploadFile(uri, "trade_license", contentType);
+        await apiAddDocument("trade_license", public_url, storage_key);
+        dispatch({ type: "setLicenseDoc", url: public_url });
+        trackEvent("license_uploaded", {});
+      },
+      submitVerification: async () => {
+        await ensureSession();
+        const supplier = await apiSubmitVerification();
+        dispatch({ type: "setSupplier", supplier });
+        trackEvent("verification_submitted", {});
+        return supplier;
+      },
+      completeOnboarding: async () => {
+        await ensureSession();
+        const supplier = await apiCompleteOnboarding();
+        dispatch({ type: "setSupplier", supplier });
+        dispatch({ type: "completeSetup" });
+        trackEvent("onboarding_completed", {});
+      },
       sendQuote: (jobId, amount) => {
         dispatch({ type: "sendQuote", jobId, amount });
         ensureSession()
@@ -581,7 +621,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: "addGalleryImage", uri });
         ensureSession()
           .then(() => uploadFile(uri, "work_photo"))
-          .then((publicUrl) => dispatch({ type: "addGalleryImage", uri: publicUrl }))
+          .then(({ public_url }) => dispatch({ type: "addGalleryImage", uri: public_url }))
           .catch(() => undefined);
       },
       loadMessages: async (conversationId) => {

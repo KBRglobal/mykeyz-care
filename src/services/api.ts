@@ -24,19 +24,35 @@ export type ApiJob = {
   created_at: string;
 };
 
+export type VerificationStatus = "draft" | "submitted" | "needs_changes" | "approved" | "rejected" | "suspended";
+
 export type ApiSupplier = {
   id: string;
   phone: string;
   full_name: string;
-  trade: string;
+  business_name: string;
+  trade_license_number: string;
+  preferred_language: string;
+  trades: string[];
   coverage_areas: string[];
   rating: number;
   review_count: number;
   plan: string;
   reveals_remaining: number;
+  verification_status: VerificationStatus;
   is_verified: boolean;
   is_onboarded: boolean;
   photo_url?: string;
+};
+
+export type ApiSupplierDocument = {
+  id: string;
+  supplier_id: string;
+  type: string;
+  public_url: string;
+  storage_key: string;
+  status: string;
+  created_at: string;
 };
 
 export type ApiConversation = {
@@ -202,11 +218,56 @@ export async function getSupplier() {
   return request<ApiSupplier>("/api/v1/supplier/me");
 }
 
-export async function updateSupplier(payload: Partial<ApiSupplier>) {
+export async function updateSupplier(payload: {
+  full_name?: string;
+  business_name?: string;
+  trade_license_number?: string;
+  photo_url?: string;
+}) {
   return request<ApiSupplier>("/api/v1/supplier/me", {
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export async function saveTrades(trades: string[]) {
+  return request<ApiSupplier>("/api/v1/supplier/me/trades", {
+    method: "PUT",
+    body: JSON.stringify({ trades }),
+  });
+}
+
+export async function saveServiceAreas(areas: string[]) {
+  return request<ApiSupplier>("/api/v1/supplier/me/service-areas", {
+    method: "PUT",
+    body: JSON.stringify({ areas }),
+  });
+}
+
+export async function saveLanguage(language: string) {
+  return request<ApiSupplier>("/api/v1/supplier/me/language", {
+    method: "PUT",
+    body: JSON.stringify({ language }),
+  });
+}
+
+export async function addDocument(type: string, publicUrl: string, storageKey: string) {
+  return request<ApiSupplierDocument>("/api/v1/supplier/me/documents", {
+    method: "POST",
+    body: JSON.stringify({ type, public_url: publicUrl, storage_key: storageKey }),
+  });
+}
+
+export async function submitVerification() {
+  return request<ApiSupplier>("/api/v1/supplier/me/verification-submit", { method: "POST" });
+}
+
+export async function getVerification() {
+  return request<{ verification_status: VerificationStatus; reason: string | null }>("/api/v1/supplier/me/verification");
+}
+
+export async function completeOnboarding() {
+  return request<ApiSupplier>("/api/v1/supplier/me/onboarding", { method: "PUT" });
 }
 
 export async function listSupplierJobs() {
@@ -252,7 +313,7 @@ export async function completeJob(jobId: string) {
 }
 
 export async function uploadFile(uri: string, fileType: "profile_photo" | "trade_license" | "work_photo", contentType = "image/jpeg") {
-  const presign = await request<{ upload_url: string; public_url: string; mode: string }>("/api/v1/upload/presign", {
+  const presign = await request<{ upload_url: string; public_url: string; file_key: string; mode: string }>("/api/v1/upload/presign", {
     method: "POST",
     body: JSON.stringify({ file_type: fileType, content_type: contentType }),
   });
@@ -264,5 +325,5 @@ export async function uploadFile(uri: string, fileType: "profile_photo" | "trade
     body: blob,
   });
   if (!response.ok) throw new Error(`upload_${response.status}`);
-  return presign.public_url;
+  return { public_url: presign.public_url, storage_key: presign.file_key };
 }

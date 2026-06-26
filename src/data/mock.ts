@@ -1,7 +1,6 @@
 import {
   AirVent,
   BadgeCheck,
-  Banknote,
   Brush,
   Building2,
   Camera,
@@ -120,7 +119,7 @@ export const setupSteps = [
   { key: "trade", label: "Trade", icon: Brush },
   { key: "business", label: "Business", icon: Building2 },
   { key: "license", label: "License", icon: FileUp },
-  { key: "bank", label: "Bank", icon: Banknote },
+  { key: "review", label: "Review", icon: BadgeCheck },
 ];
 
 export const serviceAreas = [
@@ -135,7 +134,7 @@ export const serviceAreas = [
 export const verificationBenefits = [
   { title: "High-value jobs", body: "Access premium villa and renovation tenders.", icon: BadgeCheck },
   { title: "Verified profile", body: "Customers see a stronger trust signal.", icon: Camera },
-  { title: "Faster payouts", body: "Bank details can be approved before work starts.", icon: Banknote },
+  { title: "Priority ranking", body: "Verified providers appear higher in customer matches.", icon: Sparkles },
 ];
 
 export const notifications = [

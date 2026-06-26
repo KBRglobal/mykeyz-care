@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Check, MapPin } from "lucide-react-native";
 import { BackHeader } from "@/src/components/ui/BackHeader";
@@ -12,7 +13,27 @@ import { useAppState } from "@/src/state/AppState";
 import { theme } from "@/src/theme/tokens";
 
 export default function CoverageScreen() {
-  const { state, toggleArea } = useAppState();
+  const { state, toggleArea, saveAreas } = useAppState();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const onContinue = async () => {
+    if (saving) return;
+    setError("");
+    if (state.selectedAreas.length === 0) {
+      setError("Select at least one area to continue.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveAreas();
+      router.push("/(setup)/business");
+    } catch {
+      setError("Could not save your coverage areas. Please check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Screen>
@@ -42,7 +63,12 @@ export default function CoverageScreen() {
           );
         })}
       </View>
-      <Button label={`Continue • ${state.selectedAreas.length} areas`} onPress={() => router.push("/(setup)/business")} style={styles.cta} />
+      {error ? <AppText color={theme.colors.destructive} style={styles.error}>{error}</AppText> : null}
+      <Button
+        label={saving ? "Saving..." : `Continue • ${state.selectedAreas.length} areas`}
+        onPress={onContinue}
+        style={styles.cta}
+      />
     </Screen>
   );
 }
@@ -69,6 +95,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: 10,
+  },
+  error: {
+    marginTop: 16,
   },
   cta: {
     marginTop: 26,

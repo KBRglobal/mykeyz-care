@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { BackHeader } from "@/src/components/ui/BackHeader";
 import { AppText } from "@/src/components/ui/AppText";
@@ -11,7 +12,27 @@ import { useAppState } from "@/src/state/AppState";
 import { theme } from "@/src/theme/tokens";
 
 export default function TradeScreen() {
-  const { state, toggleTrade } = useAppState();
+  const { state, toggleTrade, saveTrades } = useAppState();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const onContinue = async () => {
+    if (saving) return;
+    setError("");
+    if (state.selectedTradeKeys.length === 0) {
+      setError("Select at least one trade to continue.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveTrades();
+      router.push("/(setup)/coverage");
+    } catch {
+      setError("Could not save your trades. Please check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Screen>
@@ -43,7 +64,12 @@ export default function TradeScreen() {
           );
         })}
       </View>
-      <Button label={`Continue • ${state.selectedTradeKeys.length} selected`} onPress={() => router.push("/(setup)/coverage")} style={styles.cta} />
+      {error ? <AppText color={theme.colors.destructive} style={styles.error}>{error}</AppText> : null}
+      <Button
+        label={saving ? "Saving..." : `Continue • ${state.selectedTradeKeys.length} selected`}
+        onPress={onContinue}
+        style={styles.cta}
+      />
     </Screen>
   );
 }
@@ -72,6 +98,9 @@ const styles = StyleSheet.create({
   },
   tileLabel: {
     textTransform: "uppercase",
+  },
+  error: {
+    marginTop: 16,
   },
   cta: {
     marginTop: 28,

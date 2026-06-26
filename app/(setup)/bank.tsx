@@ -1,8 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Banknote } from "lucide-react-native";
-import { FormField } from "@/src/components/forms/FormField";
+import { BadgeCheck, Briefcase, MapPin } from "lucide-react-native";
 import { SetupProgress } from "@/src/components/product/SetupProgress";
 import { AppText } from "@/src/components/ui/AppText";
 import { BackHeader } from "@/src/components/ui/BackHeader";
@@ -12,41 +11,83 @@ import { Screen } from "@/src/components/ui/Screen";
 import { theme } from "@/src/theme/tokens";
 import { useAppState } from "@/src/state/AppState";
 
-export default function BankScreen() {
-  const { state, completeSetup, updateBank } = useAppState();
-  const [iban, setIban] = useState(state.bankIban);
-  const [holder, setHolder] = useState(state.accountHolder);
+function titleCase(value: string) {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  draft: "Not submitted yet",
+  submitted: "Submitted for review",
+  needs_changes: "Changes requested",
+  approved: "Verified",
+  rejected: "Rejected",
+  suspended: "Suspended",
+};
+
+export default function ReviewScreen() {
+  const { state, completeOnboarding } = useAppState();
+  const [finishing, setFinishing] = useState(false);
+  const [error, setError] = useState("");
+
+  const trades = state.selectedTradeKeys.map(titleCase).join(", ") || "—";
+  const areas = state.selectedAreas.join(", ") || "—";
+
+  const finish = async () => {
+    if (finishing) return;
+    setError("");
+    setFinishing(true);
+    try {
+      await completeOnboarding();
+      router.replace("/(tabs)");
+    } catch {
+      setError("Could not finish setup. Please check your connection and try again.");
+    } finally {
+      setFinishing(false);
+    }
+  };
 
   return (
     <Screen>
       <BackHeader />
       <SetupProgress active={4} />
       <View style={styles.header}>
-        <AppText variant="heading">Payout Account</AppText>
+        <AppText variant="heading">Review &amp; finish</AppText>
         <AppText color={theme.colors.mutedForeground}>
-          Where your completed job payments should be sent.
+          Confirm your details. You get paid directly by the customer — we never ask for your bank account.
         </AppText>
       </View>
       <Card style={styles.card}>
-        <Banknote color={theme.colors.accent} size={30} />
-        <View>
-          <AppText variant="eyebrow">Current payout</AppText>
-          <AppText variant="title">Emirates NBD • 8821</AppText>
+        <View style={styles.row}>
+          <Briefcase color={theme.colors.accent} size={22} />
+          <View style={styles.rowText}>
+            <AppText variant="eyebrow">Business</AppText>
+            <AppText variant="label">{state.businessName || "—"}</AppText>
+          </View>
+        </View>
+        <View style={styles.row}>
+          <Briefcase color={theme.colors.mutedForeground} size={22} />
+          <View style={styles.rowText}>
+            <AppText variant="eyebrow">Trades</AppText>
+            <AppText variant="label">{trades}</AppText>
+          </View>
+        </View>
+        <View style={styles.row}>
+          <MapPin color={theme.colors.mutedForeground} size={22} />
+          <View style={styles.rowText}>
+            <AppText variant="eyebrow">Service areas</AppText>
+            <AppText variant="label">{areas}</AppText>
+          </View>
+        </View>
+        <View style={styles.row}>
+          <BadgeCheck color={theme.colors.success} size={22} />
+          <View style={styles.rowText}>
+            <AppText variant="eyebrow">Verification</AppText>
+            <AppText variant="label">{STATUS_LABEL[state.verificationStatus] ?? state.verificationStatus}</AppText>
+          </View>
         </View>
       </Card>
-      <View style={styles.fields}>
-        <FormField label="IBAN" placeholder="AE12 0000 0000 0000 0000 000" value={iban} onChangeText={setIban} />
-        <FormField label="Account holder" placeholder="Ahmed Rashid" value={holder} onChangeText={setHolder} />
-      </View>
-      <Button
-        label="Start getting jobs"
-        onPress={() => {
-          updateBank(iban, holder);
-          completeSetup();
-          router.replace("/(tabs)");
-        }}
-        style={styles.cta}
-      />
+      {error ? <AppText color={theme.colors.destructive}>{error}</AppText> : null}
+      <Button label={finishing ? "Finishing..." : "Start getting jobs"} onPress={finish} style={styles.cta} />
     </Screen>
   );
 }
@@ -57,13 +98,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   card: {
+    gap: 18,
+  },
+  row: {
     alignItems: "center",
     flexDirection: "row",
     gap: 14,
-    marginBottom: 22,
   },
-  fields: {
-    gap: 18,
+  rowText: {
+    flex: 1,
+    gap: 2,
   },
   cta: {
     marginTop: 28,

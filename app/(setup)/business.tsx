@@ -12,9 +12,25 @@ import { theme } from "@/src/theme/tokens";
 import { useAppState } from "@/src/state/AppState";
 
 export default function BusinessScreen() {
-  const { state, updateBusiness } = useAppState();
+  const { state, saveBusiness } = useAppState();
   const [businessName, setBusinessName] = useState(state.businessName);
   const [license, setLicense] = useState(state.tradeLicenseNumber);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const onContinue = async () => {
+    if (saving) return;
+    setError("");
+    setSaving(true);
+    try {
+      await saveBusiness(businessName, license);
+      router.push("/(setup)/license");
+    } catch {
+      setError("Could not save your business profile. Please check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Screen>
@@ -39,12 +55,10 @@ export default function BusinessScreen() {
         <FormField label="Business name" placeholder="e.g. Dubai Pro Cleaners" value={businessName} onChangeText={setBusinessName} />
         <FormField label="Trade license number" placeholder="XXXXXXXXX" value={license} onChangeText={setLicense} />
       </View>
+      {error ? <AppText color={theme.colors.destructive} style={styles.error}>{error}</AppText> : null}
       <Button
-        label="Complete setup"
-        onPress={() => {
-          updateBusiness(businessName, license);
-          router.push("/(setup)/license");
-        }}
+        label={saving ? "Saving..." : "Complete setup"}
+        onPress={onContinue}
         style={styles.cta}
       />
     </Screen>
@@ -84,6 +98,9 @@ const styles = StyleSheet.create({
   },
   fields: {
     gap: 18,
+  },
+  error: {
+    marginTop: 16,
   },
   cta: {
     marginTop: 28,

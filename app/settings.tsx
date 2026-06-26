@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Bell, Building2, CalendarClock, ChevronRight, CreditCard, Languages, LogOut, MapPin, SlidersHorizontal, TrendingUp } from "lucide-react-native";
+import { Bell, Building2, CalendarClock, ChevronRight, Languages, LogOut, MapPin, SlidersHorizontal, TrendingUp } from "lucide-react-native";
 import { AppText } from "@/src/components/ui/AppText";
 import { BackHeader } from "@/src/components/ui/BackHeader";
 import { Card } from "@/src/components/ui/Card";
@@ -15,7 +15,6 @@ const rows = [
   { label: "Performance", icon: TrendingUp, route: "/performance", meta: "Weekly" },
   { label: "Language", icon: Languages, route: "/(setup)/phone", meta: "English" },
   { label: "Push Alerts", icon: Bell, route: "/notifications", meta: "On" },
-  { label: "Bank Details", icon: CreditCard, route: "/(setup)/bank", meta: "" },
 ] as const;
 
 export default function SettingsScreen() {

@@ -1,5 +1,7 @@
 import { router } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { CheckCircle2, FileUp } from "lucide-react-native";
 import { SetupProgress } from "@/src/components/product/SetupProgress";
 import { AppText } from "@/src/components/ui/AppText";
@@ -9,8 +11,53 @@ import { Card } from "@/src/components/ui/Card";
 import { Screen } from "@/src/components/ui/Screen";
 import { verificationBenefits } from "@/src/data/mock";
 import { theme } from "@/src/theme/tokens";
+import { useAppState } from "@/src/state/AppState";
 
 export default function LicenseScreen() {
+  const { state, uploadLicense, submitVerification } = useAppState();
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const onPickLicense = async () => {
+    if (uploading) return;
+    setUploadError("");
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+      });
+      if (result.canceled) return;
+      setUploading(true);
+      await uploadLicense(result.assets[0].uri, "image/jpeg");
+    } catch {
+      setUploadError("Could not upload your license. Please check your connection and try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onSubmit = async () => {
+    if (submitting) return;
+    setSubmitError("");
+    setSubmitting(true);
+    try {
+      await submitVerification();
+      router.push("/(setup)/bank");
+    } catch (err) {
+      if (err instanceof Error && err.message === "incomplete_profile") {
+        setSubmitError("Add your trades, areas, business details and license first.");
+      } else {
+        setSubmitError("Could not submit for review. Please check your connection and try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const uploaded = Boolean(state.licenseDocUrl);
+
   return (
     <Screen>
       <BackHeader />
@@ -23,17 +70,36 @@ export default function LicenseScreen() {
           Required to bid on premium jobs.
         </AppText>
       </View>
-      <Card muted style={styles.upload}>
-        <View style={styles.uploadIcon}>
-          <FileUp color={theme.colors.accent} size={34} />
-        </View>
-        <AppText variant="label" align="center">
-          Upload trade license
-        </AppText>
-        <AppText variant="eyebrow" align="center">
-          PDF or image, max 10MB
-        </AppText>
-      </Card>
+      {uploaded ? (
+        <Card muted style={[styles.upload, styles.uploaded]}>
+          <View style={[styles.uploadIcon, styles.uploadedIcon]}>
+            <CheckCircle2 color={theme.colors.success} size={34} />
+          </View>
+          <AppText variant="label" align="center">
+            License uploaded
+          </AppText>
+          <Pressable onPress={onPickLicense} disabled={uploading}>
+            <AppText variant="eyebrow" align="center" color={theme.colors.accent}>
+              {uploading ? "Uploading..." : "Replace file"}
+            </AppText>
+          </Pressable>
+        </Card>
+      ) : (
+        <Pressable onPress={onPickLicense} disabled={uploading}>
+          <Card muted style={styles.upload}>
+            <View style={styles.uploadIcon}>
+              <FileUp color={theme.colors.accent} size={34} />
+            </View>
+            <AppText variant="label" align="center">
+              {uploading ? "Uploading..." : "Upload trade license"}
+            </AppText>
+            <AppText variant="eyebrow" align="center">
+              PDF or image, max 10MB
+            </AppText>
+          </Card>
+        </Pressable>
+      )}
+      {uploadError ? <AppText color={theme.colors.destructive} style={styles.error}>{uploadError}</AppText> : null}
       <Card muted style={styles.benefits}>
         <AppText variant="eyebrow">Why verify?</AppText>
         {verificationBenefits.map((item) => (
@@ -46,7 +112,12 @@ export default function LicenseScreen() {
           </View>
         ))}
       </Card>
-      <Button label="Submit for review" onPress={() => router.push("/(setup)/bank")} style={styles.cta} />
+      {submitError ? <AppText color={theme.colors.destructive} style={styles.error}>{submitError}</AppText> : null}
+      <Button
+        label={submitting ? "Submitting..." : "Submit for review"}
+        onPress={onSubmit}
+        style={styles.cta}
+      />
       <Button label="Skip for now" tone="secondary" onPress={() => router.push("/(setup)/bank")} style={styles.skip} />
     </Screen>
   );
@@ -66,6 +137,10 @@ const styles = StyleSheet.create({
     minHeight: 190,
     justifyContent: "center",
   },
+  uploaded: {
+    borderStyle: "solid",
+    borderColor: theme.colors.success,
+  },
   uploadIcon: {
     alignItems: "center",
     backgroundColor: theme.colors.surface,
@@ -73,6 +148,9 @@ const styles = StyleSheet.create({
     height: 64,
     justifyContent: "center",
     width: 64,
+  },
+  uploadedIcon: {
+    backgroundColor: theme.colors.muted,
   },
   benefits: {
     gap: 16,
@@ -84,6 +162,9 @@ const styles = StyleSheet.create({
   benefitCopy: {
     flex: 1,
     gap: 2,
+  },
+  error: {
+    marginBottom: 12,
   },
   cta: {
     marginTop: 24,

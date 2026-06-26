@@ -4,7 +4,10 @@ type AnalyticsEvent =
   | "availability_changed"
   | "simple_mode_toggled"
   | "route_optimized"
-  | "job_completed";
+  | "job_completed"
+  | "license_uploaded"
+  | "verification_submitted"
+  | "onboarding_completed";
 
 type AnalyticsProperties = Record<string, string | number | boolean | null>;
 

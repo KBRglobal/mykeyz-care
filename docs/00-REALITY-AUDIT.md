@@ -25,6 +25,7 @@ What is not real enough:
 - `AppState.tsx` still merges API responses with mock fallbacks and local-only state.
 - Auth tokens (access + refresh) are now persisted in `expo-secure-store`; the app restores its session on restart and auto-refreshes on a 401. (Sprint 1)
 - OTP verification is real (hashed, expiring, rate-limited); fixed dev codes only appear when the backend runs with `ALLOW_DEV_OTP`. Real OTP delivery (SMS/WhatsApp) is still not wired. (Sprint 1)
+- Onboarding now persists server-side via granular endpoints. Trades, service areas, language, business profile, and trade license number are written through dedicated endpoints, survive an app restart, and rehydrate from the backend. The trade license file is uploaded and recorded as a `supplier_documents` row. `is_onboarded` is set server-side when the steps are complete, and the supplier ends in `verification_status='submitted'` (admin approval is Sprint 3). (Sprint 2)
 - Several actions update local state optimistically without a full backend contract.
 - Visual screens are not yet guaranteed to represent all backend states: pending verification, rejection, quote lost, expired job, no credits, failed upload, no network, payment failed.
 
@@ -44,6 +45,8 @@ What is not real enough:
 - `auth/verify-otp` now verifies a hashed, expiring OTP with attempt rate limiting; the fixed codes `123456`/`000000` are gated behind `ALLOW_DEV_OTP` (default off). (Sprint 1)
 - Suppliers now get unique real identities via `supplier_users`; the forced `supplier-demo` writer is gone from the core auth path. (Sprint 1)
 - Sessions and refresh tokens now exist (`sessions` table) with `auth/refresh` and `auth/logout`. (Sprint 1)
+- Supplier onboarding now has a real backend contract: granular endpoints persist trades, service areas, language, business profile, and trade license number, and a `verification_status` state machine moves a supplier `draft -> submitted`. `is_onboarded` is set server-side. Suppliers now support MULTIPLE trades (`supplier_trades`) and MULTIPLE service areas (`supplier_service_areas`) instead of a single `trade` column, and the uploaded trade license is recorded as a `supplier_documents` row. Admin approval (`submitted -> approved/rejected`) is not built yet. (Sprint 2)
+- Bank/payout details are intentionally NOT collected at onboarding. The provider is paid directly by the customer and pays the platform a commission via Apple/Google IAP (Sprint 9); there is no bank account to capture.
 - Database schema is still created inline in `initializeDatabase`; no migration system exists.
 - Demo seed data is now gated behind `SEED_DEMO_DATA` (default off). (Sprint 1)
 - Earnings endpoint is hardcoded, not ledger-based.
@@ -72,13 +75,16 @@ Existing tables:
 - `supplier_users` (Sprint 1)
 - `otp_attempts` (Sprint 1)
 - `sessions` (Sprint 1)
+- `supplier_trades` (Sprint 2)
+- `supplier_service_areas` (Sprint 2)
+- `supplier_documents` (Sprint 2)
 
 Missing production structures:
 
 - worker accounts (supplier users now exist via `supplier_users`)
-- supplier documents
-- verification reviews
-- service categories and service areas
+- supplier documents (now exist via `supplier_documents`; trade license is captured here) (Sprint 2)
+- verification reviews (a `verification_status` state machine `draft -> submitted` exists; admin review/approval is Sprint 3)
+- service categories and service areas (multi-trade + multi-area now exist via `supplier_trades` / `supplier_service_areas`) (Sprint 2)
 - inspection findings
 - job matching records
 - quote events
