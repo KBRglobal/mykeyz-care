@@ -1,23 +1,37 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "MyKeyz Care",
+    "slug": "mykeyz-care",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
-    "userInterfaceStyle": "automatic",
+    "scheme": "mykeyzcare",
+    "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.mykeyz.care",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "MyKeyz Care lets providers add real job photos to their profile.",
+        "NSPhotoLibraryUsageDescription": "MyKeyz Care lets providers upload before and after work photos.",
+        "NSMicrophoneUsageDescription": "MyKeyz Care lets providers dictate quotes in their language.",
+        "NSSpeechRecognitionUsageDescription": "MyKeyz Care uses speech recognition to turn spoken prices into quotes."
+      }
     },
     "android": {
+      "package": "com.mykeyz.care",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -31,12 +45,37 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#F8FAFC"
+        }
+      ],
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MyKeyz Care lets providers upload before and after work photos.",
+          "cameraPermission": "MyKeyz Care lets providers add real job photos to their profile."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "MyKeyz Care lets providers dictate quotes in their language.",
+          "speechRecognitionPermission": "MyKeyz Care uses speech recognition to turn spoken prices into quotes.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9ccfaaf4-45c6-43c4-91fe-722f245821d6"
+      }
+    },
+    "owner": "kbr_global"
   }
 }
