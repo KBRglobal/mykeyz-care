@@ -43,7 +43,7 @@ provider pays only via Apple/Google IAP; winning-quote selection stays in the ow
 ## Phase C — Verify + ship
 
 - [x] C1 local PG (docker postgres:16 on 55432, `DATABASE_URL=postgresql://postgres:care@localhost:55432/care`) + API (`ALLOW_DEV_OTP=true SEED_DEMO_DATA=true ADMIN_PASSWORD=smoke-pass-123`, `npm run dev` on :4000); run every suite green — auth (26), onboarding (38), admin (45), matching (65), hardening — via `npm run e2e:all`; run `npm run verify:backup`; mobile + api `npm run typecheck` green
-- [ ] C2 commit + push both repos (mykeyz-care-api + mykeyz-care); confirm no secret in the diff before pushing
+- [x] C2 commit + push both repos (mykeyz-care-api + mykeyz-care); confirm no secret in the diff before pushing
 
 ## Acceptance
 
