@@ -97,9 +97,18 @@ export type ChatMessage = {
   id: string;
   conversationId: string;
   senderType: "supplier" | "customer";
+  // Masked '•••' span when flagged — the raw text is never carried client-side.
   body: string;
+  // = stored (already-masked) body; safe to reveal via the per-message toggle.
+  originalBody?: string;
   translatedBody?: string;
+  recipientLanguage?: string;
   language?: string;
+  flagged?: boolean;
+  masked?: boolean;
+  moderationStatus?: "clean" | "flagged";
+  // Inline warning surfaced on a just-sent flagged message (from the moderation verdict).
+  warning?: string | null;
   createdAt: string;
 };
 
@@ -159,6 +168,7 @@ type Action =
   | { type: "setConversations"; conversations: ConversationItem[] }
   | { type: "setMessages"; conversationId: string; messages: ChatMessage[] }
   | { type: "appendMessage"; conversationId: string; message: ChatMessage }
+  | { type: "replaceMessage"; conversationId: string; tempId: string; message: ChatMessage }
   | { type: "sendQuote"; jobId: string; amount: number }
   | { type: "revertQuote"; jobId: string }
   | { type: "setQuoteError"; error: string | null }
@@ -291,8 +301,13 @@ function mapApiMessage(message: ApiMessage): ChatMessage {
     conversationId: message.conversation_id,
     senderType: message.sender_type,
     body: message.body,
+    originalBody: message.original_body,
     translatedBody: message.translated_body,
+    recipientLanguage: message.recipient_language,
     language: message.language,
+    flagged: message.flagged,
+    masked: message.masked,
+    moderationStatus: message.moderation_status,
     createdAt: message.created_at,
   };
 }
@@ -427,6 +442,22 @@ function reducer(state: AppState, action: Action): AppState {
           conversation.id === action.conversationId ? { ...conversation, preview: action.message.body } : conversation,
         ),
       };
+    case "replaceMessage": {
+      // Swap the optimistic placeholder for the server-stored message (masked when
+      // flagged) — falls back to append if the placeholder is already gone.
+      const list = state.messages[action.conversationId] ?? [];
+      const exists = list.some((message) => message.id === action.tempId);
+      const nextList = exists
+        ? list.map((message) => (message.id === action.tempId ? action.message : message))
+        : [...list, action.message];
+      return {
+        ...state,
+        messages: { ...state.messages, [action.conversationId]: nextList },
+        conversations: state.conversations.map((conversation) =>
+          conversation.id === action.conversationId ? { ...conversation, preview: action.message.body } : conversation,
+        ),
+      };
+    }
     case "sendQuote": {
       const alreadyQuoted = state.jobs.find((job) => job.id === action.jobId)?.status === "quoted";
       const quote: SentQuote = {
@@ -813,8 +844,15 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: "appendMessage", conversationId, message: localMessage });
         try {
           await ensureSession();
-          const saved = await apiSendMessage(conversationId, body, state.language);
-          dispatch({ type: "appendMessage", conversationId, message: mapApiMessage(saved) });
+          const result = await apiSendMessage(conversationId, body, state.language);
+          if (result.ok) {
+            // Swap the raw optimistic bubble for the stored message: when the leakage
+            // detector flags it the body comes back masked and we attach the warning so
+            // the chat screen can show the inline notice (the raw is never carried here).
+            const saved: ChatMessage = { ...mapApiMessage(result.message), warning: result.moderation.warning };
+            dispatch({ type: "replaceMessage", conversationId, tempId: localMessage.id, message: saved });
+            if (result.moderation.flagged) trackEvent("message_flagged", { conversationId });
+          }
         } catch {
           undefined;
         }

@@ -13,7 +13,8 @@ type AnalyticsEvent =
   | "job_completed"
   | "license_uploaded"
   | "verification_submitted"
-  | "onboarding_completed";
+  | "onboarding_completed"
+  | "message_flagged";
 
 type AnalyticsProperties = Record<string, string | number | boolean | null>;
 

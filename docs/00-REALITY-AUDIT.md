@@ -24,9 +24,10 @@ What is not real enough:
 - `src/data/mock.ts` still drives trades, jobs, active jobs, conversations, plans, provider defaults, notifications, and earnings references.
 - `AppState.tsx` still merges API responses with mock fallbacks and local-only state.
 - Auth tokens (access + refresh) are now persisted in `expo-secure-store`; the app restores its session on restart and auto-refreshes on a 401. (Sprint 1)
-- OTP verification is real (hashed, expiring, rate-limited); fixed dev codes only appear when the backend runs with `ALLOW_DEV_OTP`. Real OTP delivery (SMS/WhatsApp) is still not wired. (Sprint 1)
+- OTP verification is real (hashed, expiring, rate-limited); fixed dev codes only appear when the backend runs with `ALLOW_DEV_OTP`. OTP is now delivered through a real provider: `POST /api/v1/auth/request-otp` routes the code via a delivery provider and returns `dev_code` ONLY when `ALLOW_DEV_OTP=true`, never otherwise. (Sprint 1 / Sprint 7)
 - Onboarding now persists server-side via granular endpoints. Trades, service areas, language, business profile, and trade license number are written through dedicated endpoints, survive an app restart, and rehydrate from the backend. The trade license file is uploaded and recorded as a `supplier_documents` row. `is_onboarded` is set server-side when the steps are complete, and the supplier ends in `verification_status='submitted'` (admin approval is Sprint 3). (Sprint 2)
 - The reveal economy is now server-authoritative. The competitor amount is no longer exposed to the app until the provider spends a reveal on that exact job; the reveal/credits balance is the backend's `suppliers.reveals_remaining` (mirrored by an append-only `reveal_events` log), not local state, and buying extra reveals is an Apple/Google IAP placeholder (`care_reveal_single`) that moves no money yet. (Sprint 6)
+- Chat is now multilingual and moderated server-side. Each stored message carries `original_body` + `translated_body` + `language` (sender) + `recipient_language`: `GET /api/v1/conversations/:id/messages` returns the recipient's `translated_body` alongside `original_body`, and `POST .../messages` echoes the stored Message plus a `moderation` block. The anti-disintermediation leakage detector runs on the OUTBOUND supplier message: an obfuscated phone (spelled-out / spaced / Arabic-Indic / icon-encoded like `()5!`) or a "move to WhatsApp / DM me / my number is" push comes back `flagged`+`masked` (body shows a `•••` span) with a `warning` string to the sender; the raw excerpt is NEVER returned to the reader. Enforcement is SUPPLIER-ONLY and owner-gated — there is no tenant action and no payout/bank/IBAN anywhere. (Sprint 7)
 - Several actions update local state optimistically without a full backend contract.
 - Visual screens are not yet guaranteed to represent all backend states: pending verification, rejection, quote lost, expired job, no credits, failed upload, no network, payment failed.
 
@@ -56,13 +57,16 @@ What is not real enough:
 - Quotes now have a full auditable lifecycle. A quote moves `pending -> shortlisted/won/lost/withdrawn`; a supplier may edit or withdraw ONLY their own `pending` quote while the job is still `open` and within deadline (guarded `PUT /api/v1/jobs/:id/quotes/:quoteId` and `POST .../withdraw`, which return 409 `edit_window_closed` / `not_withdrawable` otherwise). Winner selection is ADMIN-ONLY in the `/admin` Control Panel (there is no customer app in Care): `POST /api/v1/admin/jobs/:id/select-quote` sets the winner to `won`, all sibling quotes to `lost`, moves the job to `assigned` with `selected_quote_id` set, and hides the `job_matches` so the job leaves every provider feed; the supplier job detail then carries `is_winner`. Every transition writes an `audit_logs` row. No payout/bank/IBAN is involved anywhere — the platform never pays providers. (Sprint 5)
 - The reveal economy is now real and server-authoritative, and the competitor-amount leak is CLOSED. `GET /api/v1/jobs` (feed) and `GET /api/v1/jobs/:id` (detail) return `competitor_amount: null` + `competitor_amount_revealed: false` UNLESS the provider holds an authorized reveal for that exact job, in which case the real number is returned with `competitor_amount_revealed: true` (`ApiJob.competitor_amount` is now `number|null`). `suppliers.reveals_remaining` is the ONLY balance, and every change is mirrored by an append-only `reveal_events` row (`plan_grant` | `reveal_debit` | `purchase`). `POST /api/v1/jobs/:id/reveals` (supplier Bearer) charges one credit and returns `201 { revealed_amount, charged_credits, reveals_remaining, wallet }`, or `402 { error:'no_credits', iap_product_id:'care_reveal_single' }` when out; re-revealing an already-revealed job charges nothing (`charged_credits:false`) and writes no new debit. `GET /api/v1/supplier/me/reveals` returns the RevealWallet (`reveals_remaining`, `granted_total`, `debited_total`, `purchased_total`, last 50 events). Plan-included reveals (minimal 0 / standard 5 / premium 10) are granted ONCE per (supplier, plan) when the provider is approved. Extra reveals are an Apple/Google IAP PLACEHOLDER: `POST /api/v1/supplier/me/reveals/purchase { iap_product_id:'care_reveal_single' }` adds +1 with a `purchase` event but takes NO money and validates NO receipt until Sprint 9 (`400 unknown_product` for any other id), and never touches bank/IBAN/payout. (Sprint 6)
 - Admin endpoints now exist for the verification slice: `/api/v1/admin` login (rate-limited, constant-time), supplier list/detail, approve/reject/request-changes, and audit-logs, all gated by an admin JWT (`role === 'admin'`); the admin jobs slice now exists too — `POST /api/v1/admin/jobs` creates a job with `findings` (returning `match_count`) and `GET /api/v1/admin/jobs` lists jobs with `finding_count`, `match_count`, and `quote_count` (Sprint 4); endpoints for money and chat admin views do not exist yet (later sprints / Milestone 10). (Sprint 3)
-- Audit logs now exist (`audit_logs`); every verification decision writes one. (Sprint 3)
+- Chat messages now translate per recipient and carry an anti-disintermediation guard. `POST /api/v1/conversations/:id/messages` (supplier Bearer) `{ body, language? }` runs the leakage detector on the OUTBOUND supplier message and stores `body` (masked `•••` span when flagged), `original_body` (= the stored body; the raw is NEVER kept here), `translated_body` (translation into `recipient_language`, pass-through when translation is disabled), `language`, `recipient_language`, `flagged`, `masked`, and `moderation_status` `'clean'|'flagged'`; the response = the stored Message PLUS `{ moderation:{ flagged, masked, warning } }`. `GET .../messages` returns `{ messages, has_more }` with each Message carrying `translated_body` + `original_body` + `flagged`/`masked`. A shared obfuscated phone (spelled-out / spaced / Arabic-Indic / icon-encoded like `()5!`) or a "move to WhatsApp / DM me / my number is" push is flagged+masked with a `warning`; the RAW excerpt is written ONLY to `leakage_evidence` and never returned to the reader. (Sprint 7)
+- Anti-disintermediation enforcement is SUPPLIER-ONLY and owner-gated. `GET /api/v1/admin/leakage?status=` (admin Bearer) returns `{ data: evidence[] }` (`{ id, supplier_id, business_name, full_name, kind 'obfuscated_phone'|'whatsapp_push', raw_excerpt, masked_excerpt, status 'open'|'reviewed', created_at }`). `POST /api/v1/admin/suppliers/:id/suspend { reason }` returns the updated supplier with `verification_status 'suspended'`, which HIDES that supplier's `job_matches` (their feed empties) and marks their open evidence `reviewed` (404 if not found, 400 `reason_required`). There is NO tenant action and NO payout/bank/IBAN anywhere. (Sprint 7)
+- WhatsApp is now live end-to-end (no-op safe when WhatsApp tokens are unset). The webhook is PUBLIC: `GET /api/v1/whatsapp/webhook` answers the Meta `hub.challenge` handshake and `POST /api/v1/whatsapp/webhook` ingests inbound events idempotently (unique `wa_message_id` in `whatsapp_events`) and always returns 200. Creating an admin job and approving a supplier fire outbound WhatsApp job-alert templates with a deep link `mykeyzcare://job/:id` (web fallback `https://care.mykeyz.io/job/:id`). (Sprint 7)
+- Audit logs now exist (`audit_logs`); every verification decision writes one, and every leakage flag + supplier suspension is recorded too. (Sprint 3 / Sprint 7)
 - Role boundaries are not complete.
 - Redis is not yet used for OTP, rate limits, queues, or deduplication.
 
 Still open after Sprint 1:
 
-- Real OTP delivery (SMS/WhatsApp provider) is not wired yet; codes are generated and verified but not sent. (Sprint 7)
+- Real OTP delivery is now wired: `POST /api/v1/auth/request-otp` routes the code through a delivery provider and only exposes `dev_code` when `ALLOW_DEV_OTP=true`. (Sprint 7)
 - A migration framework is still pending; the schema is created idempotently inline rather than through versioned migrations.
 
 ## Database Reality
@@ -85,6 +89,8 @@ Existing tables:
 - `verification_reviews` (Sprint 3)
 - `audit_logs` (Sprint 3)
 - `reveal_events` (Sprint 6)
+- `leakage_evidence` (Sprint 7)
+- `whatsapp_events` (Sprint 7)
 
 Missing production structures:
 
@@ -98,7 +104,9 @@ Missing production structures:
 - reveal credit ledger and reveal events (now exist; `suppliers.reveals_remaining` is the server-authoritative balance and every change is mirrored by an append-only `reveal_events` row — `plan_grant` / `reveal_debit` / `purchase` — surfaced as the RevealWallet via `GET /api/v1/supplier/me/reveals`; the competitor amount stays `null` in `/jobs` and `/jobs/:id` until an authorized reveal) (Sprint 6)
 - availability slots
 - route plans
-- translated message/job content
+- translated message/job content (messages now exist; each carries `original_body` + `translated_body` + `language` + `recipient_language`, translated into the recipient's language on send) (Sprint 7)
+- leakage evidence (now exist via `leakage_evidence`; obfuscated-phone / move-to-WhatsApp flags store the raw excerpt out of reader reach, surfaced via `GET /api/v1/admin/leakage`) (Sprint 7)
+- WhatsApp inbound events (now exist via `whatsapp_events`; idempotent on a unique `wa_message_id`) (Sprint 7)
 - earnings ledger
 - commission ledger
 - invoices
@@ -121,7 +129,7 @@ What exists:
 What is not real enough:
 
 - External TestFlight is waiting for Apple Beta Review.
-- An admin Control Panel now exists, served at `/admin` (secure password login -> admin JWT), with a verification queue: operators approve / reject / request-changes on suppliers (a reason is required for reject and request-changes) without DB edits, every decision writes `verification_reviews` + `audit_logs`, and the supplier app reflects the new status. This is the verification slice only. A jobs slice now also exists in the Control Panel: an operator creates a job with inspection findings and lists jobs with their match and quote counts (Sprint 4), and an operator now selects the winning quote: a ranked quote list (`GET /api/v1/admin/jobs/:id/quotes`, amount ascending, with each provider's business name, full name, and rating) and a select action (`POST /api/v1/admin/jobs/:id/select-quote`) that promotes the winner to `won`, marks siblings `lost`, assigns the job, and writes audit rows (Sprint 5). Full backoffice for money, chat, and dispute resolution is later sprints / Milestone 10. (Sprint 3)
+- An admin Control Panel now exists, served at `/admin` (secure password login -> admin JWT), with a verification queue: operators approve / reject / request-changes on suppliers (a reason is required for reject and request-changes) without DB edits, every decision writes `verification_reviews` + `audit_logs`, and the supplier app reflects the new status. This is the verification slice only. A jobs slice now also exists in the Control Panel: an operator creates a job with inspection findings and lists jobs with their match and quote counts (Sprint 4), and an operator now selects the winning quote: a ranked quote list (`GET /api/v1/admin/jobs/:id/quotes`, amount ascending, with each provider's business name, full name, and rating) and a select action (`POST /api/v1/admin/jobs/:id/select-quote`) that promotes the winner to `won`, marks siblings `lost`, assigns the job, and writes audit rows (Sprint 5). An anti-disintermediation slice now exists too: operators review the leakage queue (`GET /api/v1/admin/leakage`) and suspend a supplier (`POST /api/v1/admin/suppliers/:id/suspend`), which empties that supplier's feed and marks their open evidence reviewed — enforcement is SUPPLIER-ONLY and owner-gated, with no tenant action (Sprint 7). Full backoffice for money, chat, and dispute resolution is later sprints / Milestone 10. (Sprint 3)
 - No production monitoring contract is documented.
 - No incident or rollback procedure exists beyond the TestFlight runbook.
 - No data backup verification procedure is documented.
@@ -137,8 +145,8 @@ What exists in code or infrastructure:
 
 What is not real enough:
 
-- WhatsApp Cloud API templates, outbound sends, and deep links are not implemented end-to-end.
-- Translation pipeline is not implemented end-to-end.
+- WhatsApp is now end-to-end (no-op safe when tokens are unset): a public webhook handles the Meta `hub.challenge` handshake (GET) and ingests inbound events idempotently (POST, unique `wa_message_id`), and outbound job-alert templates fire on admin job creation + supplier approval with a `mykeyzcare://job/:id` deep link (web fallback `https://care.mykeyz.io/job/:id`). OTP also delivers through a provider now. (Sprint 7)
+- Translation pipeline is now wired for chat: each message is stored with `original_body` + `translated_body` + `language` and translated into the recipient's language on send (pass-through when translation is disabled). Job-content translation is still pending. (Sprint 7)
 - Speech-to-price is local/parser-level, not full multilingual voice input.
 - Text-to-speech help is not implemented as an app-wide interaction model.
 - Apple IAP entitlement sync is not implemented.

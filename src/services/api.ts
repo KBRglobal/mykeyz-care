@@ -113,13 +113,27 @@ export type ApiMessage = {
   conversation_id: string;
   sender_type: "supplier" | "customer";
   sender_id: string;
+  // Masked '•••' span when flagged — the RAW excerpt is NEVER returned here.
   body: string;
+  // = stored (already-masked) body; the raw is kept only in leakage_evidence.
   original_body?: string;
+  // Translation of the stored body into the recipient language (pass-through when translation is off).
   translated_body?: string;
   language?: string;
+  recipient_language?: string;
+  flagged?: boolean;
+  masked?: boolean;
+  moderation_status?: "clean" | "flagged";
   status: "sent" | "delivered" | "read";
   created_at: string;
 };
+
+/** Outbound-message moderation verdict returned alongside the stored message. */
+export type Moderation = { flagged: boolean; masked: boolean; warning: string | null };
+
+export type SendMessageResult =
+  | { ok: true; message: ApiMessage; moderation: Moderation }
+  | { ok: false; error: string };
 
 export type ApiEarnings = {
   summary: { this_week: number; this_month: number; total: number };
@@ -333,11 +347,30 @@ export async function listMessages(conversationId: string) {
   return request<{ messages: ApiMessage[]; has_more: boolean }>(`/api/v1/conversations/${conversationId}/messages`);
 }
 
-export async function sendMessage(conversationId: string, body: string, language = "en") {
-  return request<ApiMessage>(`/api/v1/conversations/${conversationId}/messages`, {
-    method: "POST",
-    body: JSON.stringify({ body, language }),
-  });
+/**
+ * Posts a supplier message. The server runs the leakage detector on this OUTBOUND
+ * text and returns the stored (possibly masked) message PLUS a moderation verdict.
+ * Never throws — branch on the result; the RAW excerpt is never returned here.
+ */
+export async function sendMessage(conversationId: string, body: string, language = "en"): Promise<SendMessageResult> {
+  try {
+    const result = await request<ApiMessage & { moderation?: Moderation }>(
+      `/api/v1/conversations/${conversationId}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({ body, language }),
+      },
+    );
+    const { moderation, ...message } = result;
+    return {
+      ok: true,
+      message,
+      moderation: moderation ?? { flagged: false, masked: false, warning: null },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "request_failed";
+    return { ok: false, error: message };
+  }
 }
 
 export type SubmitQuoteResult =

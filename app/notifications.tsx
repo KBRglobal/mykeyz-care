@@ -1,5 +1,6 @@
 import { StyleSheet, View } from "react-native";
-import { Bell, CheckCircle2, Eye, Zap } from "lucide-react-native";
+import { CheckCircle2, Eye, Zap } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { AppText } from "@/src/components/ui/AppText";
 import { BackHeader } from "@/src/components/ui/BackHeader";
 import { Card } from "@/src/components/ui/Card";
@@ -9,25 +10,29 @@ import { theme } from "@/src/theme/tokens";
 
 export default function NotificationsScreen() {
   const { state } = useAppState();
+  const { t } = useTranslation();
+  // Render every notification in the supplier's preferred language held in state.
+  const lng = state.language;
   const notifications = [
     state.sentQuotes[0]
       ? {
           id: `quote-${state.sentQuotes[0].id}`,
-          title: "Quote sent",
-          body: `AED ${state.sentQuotes[0].amount} is now with the customer.`,
+          title: t("notifQuoteSentTitle", { lng }),
+          body: t("notifQuoteSentBody", { amount: state.sentQuotes[0].amount, lng }),
         }
       : null,
     state.jobs[0]
       ? {
           id: `job-${state.jobs[0].id}`,
-          title: "New opportunity near you",
-          body: `${state.jobs[0].title} in ${state.jobs[0].area} needs a provider.`,
+          title: t("notifNewOppTitle", { lng }),
+          body: t("notifNewOppBody", { title: state.jobs[0].title, area: state.jobs[0].area, lng }),
         }
       : null,
     state.conversations[0]
       ? {
           id: `chat-${state.conversations[0].id}`,
-          title: "Customer message",
+          title: t("notifCustomerMsgTitle", { lng }),
+          // The preview is already translated server-side into the recipient language.
           body: state.conversations[0].preview,
         }
       : null,
@@ -37,13 +42,13 @@ export default function NotificationsScreen() {
     <Screen>
       <BackHeader />
       <View style={styles.head}>
-        <AppText variant="heading">Notifications</AppText>
+        <AppText variant="heading">{t("notifTitle", { lng })}</AppText>
         <AppText variant="eyebrow" color={theme.colors.info}>
-          Mark all read
+          {t("notifMarkAllRead", { lng })}
         </AppText>
       </View>
       <AppText variant="eyebrow" style={styles.section}>
-        Today
+        {t("notifToday", { lng })}
       </AppText>
       <View style={styles.list}>
         {notifications.map((item, index) => {
@@ -57,7 +62,7 @@ export default function NotificationsScreen() {
               <View style={styles.copy}>
                 <View style={styles.rowTop}>
                   <AppText variant="label">{item.title}</AppText>
-                  <AppText variant="eyebrow">{index === 0 ? "Now" : `${index * 12}m`}</AppText>
+                  <AppText variant="eyebrow">{index === 0 ? t("notifNow", { lng }) : `${index * 12}m`}</AppText>
                 </View>
                 <AppText color={theme.colors.foregroundSoft}>{item.body}</AppText>
               </View>
