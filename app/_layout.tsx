@@ -5,6 +5,7 @@ import {
 } from "@expo-google-fonts/inter";
 import { JetBrainsMono_700Bold } from "@expo-google-fonts/jetbrains-mono";
 import { Montserrat_800ExtraBold, Montserrat_900Black } from "@expo-google-fonts/montserrat";
+import Constants from "expo-constants";
 import { useFonts } from "expo-font";
 import { DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -21,9 +22,43 @@ export const unstable_settings = {
   initialRouteName: "(auth)",
 };
 
+// Minimal surface of @sentry/react-native we touch. The module is optional and resolved
+// indirectly so neither TypeScript nor the bundler statically depends on it.
+type SentryModule = {
+  init: (options: Record<string, unknown>) => void;
+  wrap: <C>(component: C) => C;
+};
+
+// Guarded, defensive Sentry bootstrap. When EXPO_PUBLIC_SENTRY_DSN is unset this is a
+// complete no-op: no client is created and the native module is never touched. The
+// require is wrapped in try/catch so a missing native module can never crash the JS
+// bundle (same defensive posture as src/integrations/analytics.ts). No tokens or PII
+// are ever passed to Sentry here.
+function initSentry(): SentryModule | null {
+  const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+  if (!dsn) return null;
+  try {
+    // Indirect specifier keeps the optional dependency out of the static module graph
+    // (TypeScript only resolves a literal `require("…")`, not a variable specifier).
+    const moduleName = "@sentry/react-native";
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Sentry = require(moduleName) as SentryModule;
+    Sentry.init({
+      dsn,
+      environment: (Constants.expoConfig?.extra?.environment as string | undefined) ?? "production",
+      release: Constants.expoConfig?.version,
+    });
+    return Sentry;
+  } catch {
+    return null;
+  }
+}
+
+const sentry = initSentry();
+
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayout() {
   const [loaded, error] = useFonts({
     Inter_400Regular,
     Inter_600SemiBold,
@@ -85,3 +120,7 @@ export default function RootLayout() {
     </I18nextProvider>
   );
 }
+
+// When Sentry is active, wrap the root so render crashes (and the React tree) are
+// captured. With no DSN, `sentry` is null and the unwrapped component is exported as-is.
+export default sentry ? sentry.wrap(RootLayout) : RootLayout;

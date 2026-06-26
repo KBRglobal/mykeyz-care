@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from "react";
 import type { LucideIcon } from "lucide-react-native";
 import { activeJobs as initialActiveJobs, conversations as initialConversations, jobs as initialJobs, provider } from "@/src/data/mock";
-import { trackEvent } from "@/src/integrations/analytics";
+import { identify, reset as resetAnalytics, trackEvent } from "@/src/integrations/analytics";
 import {
   ensureSession,
   hasSession,
@@ -764,11 +764,16 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         const result = await apiVerifyOtp(phone, code);
         dispatch({ type: "setSupplier", supplier: result.supplier });
         dispatch({ type: "setPhone", phone: result.supplier.phone });
+        // Tie analytics to the authenticated supplier and record the login.
+        identify(result.supplier.id);
+        trackEvent("login", {});
         await loadAll().catch(() => undefined);
         return result.supplier;
       },
       logout: async () => {
         await apiLogout();
+        // Decouple analytics from the supplier so the next session starts anonymous.
+        resetAnalytics();
         dispatch({ type: "reset" });
       },
       toggleTrade: (tradeKey) => dispatch({ type: "toggleTrade", tradeKey }),

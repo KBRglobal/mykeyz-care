@@ -2,6 +2,8 @@
 
 Use this checklist for every iOS beta build. Do not skip steps.
 
+This runbook is the iOS build/submit half of a release. The full repeatable release flow — backend pre-release gate (`npm run typecheck`, `npm run e2e:all`, `npm run verify:backup`), mobile gate (`npx tsc --noEmit`), env-var inventory, monitoring enablement, and rollback — lives in `09-RELEASE-AND-TESTFLIGHT.md` (Repeatable Release Checklist). What to watch after launch — analytics events, structured logs, error tracking, backup verification, rate limiting — lives in `MONITORING.md`. Do not duplicate those steps here; run this runbook at the Build + Submit step of that checklist.
+
 ## Ground Rules
 
 - Never print secrets, API keys, private keys, provisioning data, or raw environment variables.
