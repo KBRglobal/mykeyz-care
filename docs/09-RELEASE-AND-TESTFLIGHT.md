@@ -197,8 +197,11 @@ Backend on Railway:
 - `BACKUP_DIR` — directory the nightly dump lands in (default `./backups`); read by `verify:backup`.
 - `R2_*` — Cloudflare R2 storage credentials (account, access key, secret, bucket).
 - `WHATSAPP_*` — WhatsApp Business API tokens (no-op safe when unset).
-- `APPLE_IAP_*` — Apple In-App Purchase / App Store Server config.
-- `GOOGLE_PLAY_*` — Google Play billing / service-account config.
+- `APPLE_IAP_*` — Apple In-App Purchase / App Store Server config. For real receipt verification set
+  `APPLE_IAP_BUNDLE_ID`, `APPLE_IAP_ENVIRONMENT` (`production`), and `APPLE_IAP_APP_APPLE_ID` (the numeric
+  App Store id — REQUIRED by the verifier in production). Missing → fail-closed (receipts rejected) in prod.
+- `GOOGLE_PLAY_*` — Google Play billing / service-account config. Set `GOOGLE_PLAY_PACKAGE_NAME` +
+  `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (androidpublisher-scoped service account) for real token verification.
 
 Mobile on EAS:
 
@@ -240,7 +243,14 @@ Run the existing Release Verification section above (mobile + API + admin smoke)
 
 ### Standing launch gates (must clear before go-live)
 
-These two gates are hard blockers for production go-live. Call them out in every pre-launch review:
-
-1. IAP receipt verification. Apple/Google in-app-purchase receipt signature / `x5c` chain verification must land before go-live. `src/appstore.ts` is currently DECODE-ONLY (it decodes the JWS payload but does not yet cryptographically verify the signature / certificate chain). Real money flows only after full signature + `x5c` verification is in place.
+1. ~~IAP receipt verification~~ — **CLOSED (Sprint 11, 2026-06-27).** `src/appstore.ts` now cryptographically
+   verifies receipts: Apple via the official `@apple/app-store-server-library` (`SignedDataVerifier` checks the
+   JWS `x5c` chain against the pinned Apple root CAs + bundle id + environment), Google via the Play Developer
+   API (`google-auth-library` service-account JWT → `purchases.subscriptionsv2`/`purchases.products`). It is
+   **fail-closed**: in `NODE_ENV=production` a receipt is honoured only when the store keys are configured —
+   otherwise it is rejected (no decode-only trust). Dev/test keep a decode-only fallback so the local e2e suites
+   run without store credentials. **To activate in prod, set the env above** (Apple: `APPLE_IAP_BUNDLE_ID` +
+   `APPLE_IAP_ENVIRONMENT=production` + `APPLE_IAP_APP_APPLE_ID`; Google: `GOOGLE_PLAY_PACKAGE_NAME` +
+   `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`). Verified: forged/unsigned JWS rejected when configured; prod-without-keys
+   rejects (fail-closed); `e2e:all` green.
 2. Admin credentials in prod. `ADMIN_PASSWORD` and `ADMIN_EMAIL` must be set on Railway production, or the `/admin` Control Panel cannot be used and operators cannot approve suppliers, create jobs, select winners, or read the System health badge.
