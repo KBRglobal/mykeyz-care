@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { CheckCircle2, Crown } from "lucide-react-native";
 import { AppText } from "@/src/components/ui/AppText";
@@ -6,11 +6,50 @@ import { BackHeader } from "@/src/components/ui/BackHeader";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { Screen } from "@/src/components/ui/Screen";
-import { plans } from "@/src/data/mock";
 import { theme } from "@/src/theme/tokens";
+import { useAppState } from "@/src/state/AppState";
+import { getPlans, type SubscriptionPlan } from "@/src/services/api";
+
+// Maps a server plan tier to its store product id. Free tiers have no purchase.
+const PLAN_PRODUCT_ID: Record<string, string> = {
+  standard: "care_plan_standard",
+  premium: "care_plan_premium",
+};
+
+function titleCase(value: string) {
+  return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export default function PlansScreen() {
-  const elite = plans[4];
+  const { state, purchaseProduct } = useAppState();
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Catalog is SERVER TRUTH — never hardcode prices/reveals/tiers on the client.
+  useEffect(() => {
+    getPlans()
+      .then((result) => setPlans(result.data.filter((plan) => plan.active)))
+      .catch(() => setError("Could not load plans. Pull to retry."));
+  }, []);
+
+  // Current tier comes straight from the server entitlement, never client-decided.
+  const currentTier = state.entitlement?.plan ?? null;
+
+  const onPurchase = useCallback(
+    async (productId: string) => {
+      if (pending) return;
+      setPending(productId);
+      setError(null);
+      // Store IAP -> server validate -> entitlement refetched inside AppState.
+      const result = await purchaseProduct(productId);
+      setPending(null);
+      if (!result.ok) {
+        setError(result.error === "already_processed" ? "This purchase was already applied." : "Purchase could not be completed.");
+      }
+    },
+    [pending, purchaseProduct],
+  );
 
   return (
     <Screen>
@@ -20,46 +59,65 @@ export default function PlansScreen() {
           Upgrade your business
         </AppText>
         <AppText variant="heading" align="center">
-          Elite Partner
+          Choose your plan
         </AppText>
       </View>
-      <Card style={styles.elite}>
-        <View style={styles.eliteTop}>
-          <View style={styles.crown}>
-            <Crown color={theme.colors.accent} fill={theme.colors.accent} size={34} />
-          </View>
-          <View style={styles.price}>
-            <AppText variant="heading" color={theme.colors.primaryForeground}>
-              999
-            </AppText>
-            <AppText variant="eyebrow" color={theme.colors.accent}>
-              AED / mo
-            </AppText>
-          </View>
-        </View>
-        {["Elite minisite for your business", "Unlimited price reveals", "Priority search listing", "Stronger trust profile"].map((item) => (
-          <View key={item} style={styles.benefit}>
-            <CheckCircle2 color={theme.colors.accent} fill={theme.colors.accent} size={19} />
-            <AppText color={theme.colors.primaryForeground} style={styles.benefitText}>
-              {item}
-            </AppText>
-          </View>
-        ))}
-        <Button label="Upgrade now" tone="accent" />
-      </Card>
+      {error ? (
+        <AppText color={theme.colors.destructive} align="center" style={styles.error}>
+          {error}
+        </AppText>
+      ) : null}
       <View style={styles.planList}>
-        {plans.slice(0, 4).map((plan, index) => (
-          <Card key={plan.name} muted style={styles.planRow}>
-            <View>
-              <AppText variant="label">{plan.name}</AppText>
-              <AppText variant="eyebrow">{plan.badge}</AppText>
-            </View>
-            <View style={styles.planRight}>
-              <AppText variant="label">{plan.price}</AppText>
-              <AppText variant="eyebrow">{plan.reveals} reveals</AppText>
-            </View>
-          </Card>
-        ))}
+        {plans.map((plan) => {
+          const isCurrent = currentTier === plan.tier;
+          const productId = PLAN_PRODUCT_ID[plan.tier] ?? null;
+          const isBusy = pending === productId;
+          return (
+            <Card key={plan.tier} style={[styles.planCard, isCurrent && styles.planCardCurrent]}>
+              <View style={styles.planHead}>
+                <View style={styles.planName}>
+                  <Crown
+                    color={isCurrent ? theme.colors.accent : theme.colors.mutedForeground}
+                    fill={isCurrent ? theme.colors.accent : "transparent"}
+                    size={22}
+                  />
+                  <AppText variant="title" color={isCurrent ? theme.colors.primaryForeground : undefined}>
+                    {titleCase(plan.tier)}
+                  </AppText>
+                </View>
+                <View style={styles.priceBox}>
+                  <AppText variant="label" color={isCurrent ? theme.colors.primaryForeground : undefined}>
+                    {plan.price_aed === 0 ? "Free" : `${plan.price_aed} AED`}
+                  </AppText>
+                  {plan.price_aed > 0 ? (
+                    <AppText variant="eyebrow" color={isCurrent ? theme.colors.accent : theme.colors.mutedForeground}>
+                      / mo
+                    </AppText>
+                  ) : null}
+                </View>
+              </View>
+              <View style={styles.benefit}>
+                <CheckCircle2 color={theme.colors.accent} fill={theme.colors.accent} size={18} />
+                <AppText color={isCurrent ? theme.colors.primaryForeground : undefined}>
+                  {plan.included_reveals} reveal {plan.included_reveals === 1 ? "credit" : "credits"} included
+                </AppText>
+              </View>
+              {isCurrent ? (
+                <View style={styles.currentBadge}>
+                  <AppText variant="eyebrow" color={theme.colors.accent}>
+                    Current plan
+                  </AppText>
+                </View>
+              ) : productId ? (
+                <Button
+                  label={isBusy ? "Working…" : `Upgrade to ${titleCase(plan.tier)}`}
+                  tone="accent"
+                  onPress={() => onPurchase(productId)}
+                />
+              ) : null}
+            </Card>
+          );
+        })}
       </View>
     </Screen>
   );
@@ -70,26 +128,31 @@ const styles = StyleSheet.create({
     gap: 4,
     marginBottom: 24,
   },
-  elite: {
+  error: {
+    marginBottom: 12,
+  },
+  planList: {
+    gap: 12,
+  },
+  planCard: {
+    gap: 14,
+    padding: 20,
+  },
+  planCardCurrent: {
     backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primary,
-    gap: 18,
-    marginBottom: 16,
-    padding: 28,
   },
-  eliteTop: {
+  planHead: {
+    alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  crown: {
+  planName: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderRadius: 18,
-    height: 62,
-    justifyContent: "center",
-    width: 62,
+    flexDirection: "row",
+    gap: 10,
   },
-  price: {
+  priceBox: {
     alignItems: "flex-end",
   },
   benefit: {
@@ -97,19 +160,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
-  benefitText: {
-    fontFamily: theme.fonts.sansBold,
-  },
-  planList: {
-    gap: 10,
-  },
-  planRow: {
+  currentBadge: {
     alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 16,
-  },
-  planRight: {
-    alignItems: "flex-end",
   },
 });

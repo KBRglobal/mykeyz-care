@@ -158,14 +158,6 @@ export const notifications = [
   },
 ];
 
-export const plans = [
-  { name: "Minimal Listing", price: "Free", reveals: "0", badge: "Basic profile" },
-  { name: "Bold Visibility", price: "100 AED/mo", reveals: "0", badge: "Verified Expert" },
-  { name: "Premium Highlight", price: "349 AED/mo", reveals: "10", badge: "Top Rated" },
-  { name: "High Impact Card", price: "599 AED/mo", reveals: "30", badge: "Blue card" },
-  { name: "Elite Minisite", price: "999 AED/mo", reveals: "Unlimited", badge: "Full minisite" },
-];
-
 export const earnings = {
   month: 4200,
   week: 1800,

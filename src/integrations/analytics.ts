@@ -7,6 +7,7 @@ type AnalyticsEvent =
   | "quote_edit_blocked"
   | "price_revealed"
   | "reveal_purchased"
+  | "iap_purchase_validated"
   | "availability_changed"
   | "simple_mode_toggled"
   | "route_optimized"

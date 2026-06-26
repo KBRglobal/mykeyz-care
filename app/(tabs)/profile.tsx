@@ -45,7 +45,9 @@ export default function ProfileScreen() {
       <Card style={styles.plan}>
         <Crown color={theme.colors.accent} fill={theme.colors.accent} size={28} />
         <View style={styles.planCopy}>
-          <AppText variant="title">Premium Highlight</AppText>
+          <AppText variant="title">
+            {`${(state.entitlement?.plan ?? state.provider.plan ?? "minimal").replace(/\b\w/g, (letter) => letter.toUpperCase())} plan`}
+          </AppText>
           <AppText color={theme.colors.mutedForeground}>
           {state.revealCredits} reveals remaining in your wallet.
           </AppText>

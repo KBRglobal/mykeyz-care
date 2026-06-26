@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { BatteryLow, Crown } from "lucide-react-native";
 import { AppText } from "@/src/components/ui/AppText";
 import { Button } from "@/src/components/ui/Button";
@@ -48,20 +48,22 @@ export default function CreditsScreen() {
             AED 49
           </AppText>
         </Card>
-        <Card muted style={styles.subscription}>
-          <View style={styles.rowLeft}>
-            <Crown color={theme.colors.accent} fill={theme.colors.accent} size={26} />
-            <View>
-              <AppText variant="eyebrow">Subscription</AppText>
-              <AppText variant="title" style={styles.optionTitle}>
-                Elite Partner
-              </AppText>
+        <Pressable onPress={() => router.push("/plans")}>
+          <Card muted style={styles.subscription}>
+            <View style={styles.rowLeft}>
+              <Crown color={theme.colors.accent} fill={theme.colors.accent} size={26} />
+              <View>
+                <AppText variant="eyebrow">Subscription</AppText>
+                <AppText variant="title" style={styles.optionTitle}>
+                  See all plans
+                </AppText>
+              </View>
             </View>
-          </View>
-          <AppText variant="eyebrow" color={theme.colors.info}>
-            Upgrade
-          </AppText>
-        </Card>
+            <AppText variant="eyebrow" color={theme.colors.info}>
+              Upgrade
+            </AppText>
+          </Card>
+        </Pressable>
       </View>
       <Button label={busy ? "Working…" : "Buy 1 reveal"} onPress={onBuy} />
     </Screen>

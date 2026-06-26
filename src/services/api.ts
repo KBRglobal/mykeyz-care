@@ -88,6 +88,32 @@ export type ApiSupplier = {
   photo_url?: string;
 };
 
+// ---- Plans & entitlement (Sprint 9, SERVER-AUTHORITATIVE) ----
+
+/**
+ * A catalog plan tier as the server defines it. The client NEVER decides price,
+ * included reveals, or ranking weight — it only renders what /api/v1/plans returns.
+ */
+export type SubscriptionPlan = {
+  tier: string;
+  price_aed: number;
+  included_reveals: number;
+  ranking_weight: number;
+  active: boolean;
+};
+
+/**
+ * The provider's live entitlement. This is SERVER TRUTH — plan + reveals_remaining are
+ * granted ONLY by a validated Apple/Google IAP and can never be set by the client.
+ * `subscription` is null when the provider has no active paid plan (free/minimal tier).
+ */
+export type Entitlement = {
+  plan: string;
+  reveals_remaining: number;
+  ranking_weight: number;
+  subscription: { status: string; expires_at: string | null; store: string } | null;
+};
+
 export type ApiSupplierDocument = {
   id: string;
   supplier_id: string;
@@ -293,6 +319,19 @@ export async function getJobDetail(jobId: string) {
 
 export async function getSupplier() {
   return request<ApiSupplier>("/api/v1/supplier/me");
+}
+
+/** The plan catalog. The server is the only authority on tiers, prices, and reveals. */
+export async function getPlans() {
+  return request<{ data: SubscriptionPlan[] }>("/api/v1/plans");
+}
+
+/**
+ * The provider's live, server-authoritative entitlement (plan + reveals_remaining).
+ * This is the ONLY source of truth for the current tier — never infer it client-side.
+ */
+export async function getEntitlement() {
+  return request<Entitlement>("/api/v1/supplier/me/entitlement");
 }
 
 export async function updateSupplier(payload: {
@@ -524,21 +563,46 @@ export async function getReveals() {
   return request<RevealWallet>("/api/v1/supplier/me/reveals");
 }
 
-export type PurchaseRevealResult =
-  | { ok: true; status: number; wallet: RevealWallet }
+// ---- IAP receipt validation (Sprint 9, Apple/Google ONLY — no cards, no bank) ----
+
+/**
+ * Result of submitting a store receipt to the server for validation. Never throws —
+ * branch on the result. 200 -> fresh {@link Entitlement} (benefits applied server-side).
+ * 400 `invalid_receipt` / `unknown_product`; 409 `already_processed` on a replay of the
+ * same store transaction (grants nothing — refetch the entitlement to show server truth).
+ */
+export type IapPurchaseResult =
+  | { ok: true; status: number; entitlement: Entitlement }
   | { ok: false; status: number; error: string };
 
 /**
- * PLACEHOLDER single-reveal purchase (Sprint 9 will add real payment/receipt validation).
- * Never throws. 201 -> RevealWallet (balance +1). 400 `unknown_product` for any other id.
+ * Validate an Apple App Store transaction. The server decodes the signed JWS, maps the
+ * product_id (care_plan_standard/premium -> plan, care_reveal_single -> +1 reveal), and
+ * applies the benefit SERVER-SIDE. The client passes the store receipt only — it never
+ * grants itself a plan or reveals.
  */
-export async function purchaseReveal(iapProductId = "care_reveal_single"): Promise<PurchaseRevealResult> {
+export async function submitApplePurchase(signedTransaction: string): Promise<IapPurchaseResult> {
   try {
-    const wallet = await request<RevealWallet>("/api/v1/supplier/me/reveals/purchase", {
+    const entitlement = await request<Entitlement>("/api/v1/supplier/me/iap/apple", {
       method: "POST",
-      body: JSON.stringify({ iap_product_id: iapProductId }),
+      body: JSON.stringify({ signed_transaction: signedTransaction }),
     });
-    return { ok: true, status: 201, wallet };
+    return { ok: true, status: 200, entitlement };
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status ?? 0;
+    const message = error instanceof Error ? error.message : "request_failed";
+    return { ok: false, status, error: message };
+  }
+}
+
+/** Validate a Google Play purchase. Parity route to {@link submitApplePurchase}. */
+export async function submitGooglePurchase(purchaseToken: string, productId: string): Promise<IapPurchaseResult> {
+  try {
+    const entitlement = await request<Entitlement>("/api/v1/supplier/me/iap/google", {
+      method: "POST",
+      body: JSON.stringify({ purchase_token: purchaseToken, product_id: productId }),
+    });
+    return { ok: true, status: 200, entitlement };
   } catch (error) {
     const status = (error as Error & { status?: number }).status ?? 0;
     const message = error instanceof Error ? error.message : "request_failed";

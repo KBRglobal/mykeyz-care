@@ -19,7 +19,8 @@ import {
   listSupplierJobs,
   revealJobBudget as apiRevealJobBudget,
   getReveals as apiGetReveals,
-  purchaseReveal as apiPurchaseReveal,
+  getEntitlement as apiGetEntitlement,
+  submitApplePurchase as apiSubmitApplePurchase,
   sendMessage as apiSendMessage,
   submitQuote,
   editQuote as apiEditQuote,
@@ -38,6 +39,7 @@ import {
   type ApiMessage,
   type ApiSupplier,
   type RevealWallet,
+  type Entitlement,
 } from "@/src/services/api";
 
 const STORAGE_KEY = "mykeyz-care-state-v1";
@@ -47,8 +49,49 @@ export type RevealOutcome =
   | { ok: true; revealedAmount: number; revealsRemaining: number; chargedCredits: boolean }
   | { ok: false; needsPurchase: boolean; error: string };
 
-/** Result of the placeholder single-reveal purchase. */
-export type PurchaseOutcome = { ok: true; revealsRemaining: number } | { ok: false; error: string };
+/** Result of an IAP purchase (plan or single-reveal) validated server-side. */
+export type PurchaseOutcome = { ok: true; entitlement: Entitlement } | { ok: false; error: string };
+
+// --- Dev store stub (Sprint 9) -------------------------------------------------------
+// The real store purchase (expo-iap) is not yet wired. Until it is, we build a dev-stub
+// signed transaction the Sprint 9 server accepts (base64url header.payload.sig), so the
+// store -> validate -> apply -> refetch path runs end to end. The SERVER still decides
+// every benefit — this only stands in for the native store handing back a receipt.
+
+const B64URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+function base64UrlJson(value: unknown): string {
+  const text = JSON.stringify(value);
+  let output = "";
+  for (let index = 0; index < text.length; index += 3) {
+    const a = text.charCodeAt(index);
+    const hasB = index + 1 < text.length;
+    const hasC = index + 2 < text.length;
+    const b = hasB ? text.charCodeAt(index + 1) : 0;
+    const c = hasC ? text.charCodeAt(index + 2) : 0;
+    output += B64URL_ALPHABET[a >> 2];
+    output += B64URL_ALPHABET[((a & 3) << 4) | (b >> 4)];
+    output += hasB ? B64URL_ALPHABET[((b & 15) << 2) | (c >> 6)] : "";
+    output += hasC ? B64URL_ALPHABET[c & 63] : "";
+  }
+  return output;
+}
+
+/**
+ * TODO(store): replace with the real expo-iap purchase result. On a production build this
+ * is where we present the App Store sheet and read back the signed transaction JWS, then
+ * pass THAT to submitApplePurchase. The dev stub keeps each transaction id unique so the
+ * server records a real (non-replay) purchase every tap.
+ */
+function buildStubAppleTransaction(productId: string): string {
+  const header = base64UrlJson({ alg: "ES256" });
+  const payload = base64UrlJson({
+    originalTransactionId: `dev-${productId}-${Date.now()}`,
+    productId,
+    expiresDate: null,
+  });
+  return `${header}.${payload}.sig`;
+}
 
 export type QuoteStatus = "draft" | "sent" | "won" | "lost";
 
@@ -150,6 +193,9 @@ type AppState = {
   // the API (supplier.reveals_remaining or wallet.reveals_remaining), never computed here.
   revealCredits: number;
   wallet: RevealWallet | null;
+  // Server-authoritative entitlement (plan + reveals_remaining). Granted ONLY by a
+  // validated Apple/Google IAP — the client never sets its own plan or reveal balance.
+  entitlement: Entitlement | null;
   totalEarned: number;
   earnings: EarningsState;
   quotesSent: number;
@@ -178,6 +224,7 @@ type Action =
   | { type: "revertQuote"; jobId: string }
   | { type: "setQuoteError"; error: string | null }
   | { type: "setWallet"; wallet: RevealWallet }
+  | { type: "setEntitlement"; entitlement: Entitlement }
   | { type: "revealSuccess"; jobId: string; wallet: RevealWallet }
   | { type: "completeJob"; jobId?: string }
   | { type: "toggleSimpleMode" }
@@ -209,6 +256,7 @@ const initialState: AppState = {
   profileGallery: [],
   revealCredits: 0,
   wallet: null,
+  entitlement: null,
   // Ledger-derived; zero until the API hydrates real values. No mock/hardcoded totals.
   totalEarned: 0,
   earnings: {
@@ -501,6 +549,9 @@ function reducer(state: AppState, action: Action): AppState {
     case "setWallet":
       // Balance comes straight from the server wallet — never recomputed locally.
       return { ...state, wallet: action.wallet, revealCredits: action.wallet.reveals_remaining };
+    case "setEntitlement":
+      // Plan + reveal balance are server truth — read straight from the entitlement.
+      return { ...state, entitlement: action.entitlement, revealCredits: action.entitlement.reveals_remaining };
     case "revealSuccess":
       return {
         ...state,
@@ -574,7 +625,9 @@ type AppStateContextValue = {
   ) => Promise<void>;
   revealJobBudget: (jobId: string) => Promise<RevealOutcome>;
   purchaseReveal: () => Promise<PurchaseOutcome>;
+  purchaseProduct: (productId: string) => Promise<PurchaseOutcome>;
   refreshWallet: () => Promise<void>;
+  refreshEntitlement: () => Promise<void>;
   completeJob: (jobId?: string) => void;
   toggleSimpleMode: () => void;
   toggleAvailabilitySlot: (date: string, slot: string) => void;
@@ -602,7 +655,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   const loadAll = useCallback(async () => {
-    const [supplier, jobs, supplierJobs, earningsResult, conversationsResult, wallet] = await Promise.all([
+    const [supplier, jobs, supplierJobs, earningsResult, conversationsResult, wallet, entitlement] = await Promise.all([
       getSupplier(),
       listJobs(),
       listSupplierJobs(),
@@ -610,6 +663,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       listConversations(),
       // The wallet is the source of truth for the reveal balance; tolerate its failure.
       apiGetReveals().catch(() => null),
+      // Entitlement (plan + reveals_remaining) is server truth; tolerate its failure.
+      apiGetEntitlement().catch(() => null),
     ]);
     dispatch({ type: "setSupplier", supplier });
     dispatch({ type: "setJobs", jobs: jobs.jobs.map(mapApiJob) });
@@ -617,6 +672,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "setEarnings", earnings: mapApiEarnings(earningsResult) });
     dispatch({ type: "setConversations", conversations: conversationsResult.conversations.map(mapApiConversation) });
     if (wallet) dispatch({ type: "setWallet", wallet });
+    // Entitlement is set AFTER the wallet so the server's authoritative reveal balance wins.
+    if (entitlement) dispatch({ type: "setEntitlement", entitlement });
   }, []);
 
   // On boot, restore a persisted session and hydrate from the API. Never auto-logs-in.
@@ -650,20 +707,6 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Placeholder single-reveal purchase (+1). Balance updates from the returned wallet.
-  const purchaseReveal = useCallback(async (): Promise<PurchaseOutcome> => {
-    try {
-      await ensureSession();
-      const result = await apiPurchaseReveal();
-      if (!result.ok) return { ok: false, error: result.error };
-      dispatch({ type: "setWallet", wallet: result.wallet });
-      trackEvent("reveal_purchased", {});
-      return { ok: true, revealsRemaining: result.wallet.reveals_remaining };
-    } catch {
-      return { ok: false, error: "request_failed" };
-    }
-  }, []);
-
   const refreshWallet = useCallback(async () => {
     try {
       await ensureSession();
@@ -673,6 +716,42 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       // Keep the last known server balance on failure.
     }
   }, []);
+
+  const refreshEntitlement = useCallback(async () => {
+    try {
+      await ensureSession();
+      const entitlement = await apiGetEntitlement();
+      dispatch({ type: "setEntitlement", entitlement });
+    } catch {
+      // Keep the last known server entitlement on failure.
+    }
+  }, []);
+
+  // Buy a plan or a single reveal via the store IAP, then validate server-side. The store
+  // hands back a signed transaction; we POST it to the validate endpoint, which applies the
+  // benefit SERVER-SIDE and returns the fresh entitlement. We then refetch the wallet so the
+  // reveal ledger surfaces stay in sync. Nothing is granted or decremented on the client.
+  const purchaseProduct = useCallback(
+    async (productId: string): Promise<PurchaseOutcome> => {
+      try {
+        await ensureSession();
+        // TODO(store): swap this dev stub for the real expo-iap purchase result.
+        const signedTransaction = buildStubAppleTransaction(productId);
+        const result = await apiSubmitApplePurchase(signedTransaction);
+        if (!result.ok) return { ok: false, error: result.error };
+        dispatch({ type: "setEntitlement", entitlement: result.entitlement });
+        await refreshWallet();
+        trackEvent("iap_purchase_validated", { productId });
+        return { ok: true, entitlement: result.entitlement };
+      } catch {
+        return { ok: false, error: "request_failed" };
+      }
+    },
+    [refreshWallet],
+  );
+
+  // Single-reveal upsell — flows through the SAME IAP validate path (care_reveal_single).
+  const purchaseReveal = useCallback((): Promise<PurchaseOutcome> => purchaseProduct("care_reveal_single"), [purchaseProduct]);
 
   const value = useMemo<AppStateContextValue>(
     () => ({
@@ -794,7 +873,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       },
       revealJobBudget,
       purchaseReveal,
+      purchaseProduct,
       refreshWallet,
+      refreshEntitlement,
       completeJob: (jobId) => {
         dispatch({ type: "completeJob", jobId });
         if (jobId) {
@@ -869,7 +950,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       },
       resetApp: () => dispatch({ type: "reset" }),
     }),
-    [revealJobBudget, purchaseReveal, refreshWallet, state, loadAll],
+    [revealJobBudget, purchaseReveal, purchaseProduct, refreshWallet, refreshEntitlement, state, loadAll],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
