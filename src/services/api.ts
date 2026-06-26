@@ -1,9 +1,13 @@
+import { clearSession, loadSession, saveSession } from "./session";
+
 const API_URLS = [
   process.env.EXPO_PUBLIC_API_URL ?? "https://care-api.mykeyz.io",
   "https://mykeyz-care-api-production.up.railway.app",
 ];
 
-let authToken: string | null = null;
+let accessToken: string | null = null;
+let refreshToken: string | null = null;
+let initialized = false;
 
 export type ApiJob = {
   id: string;
@@ -64,36 +68,131 @@ export type ApiEarnings = {
   transactions: { job_id: string; job_name: string; completed_at: string; gross_amount: number; commission: number; net_amount: number }[];
 };
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+type AuthSession = { token: string; refresh_token: string; supplier: ApiSupplier };
+
+/** Load any persisted tokens into memory. Safe to call multiple times. */
+export async function initSession() {
+  if (initialized) return;
+  const stored = await loadSession();
+  if (stored) {
+    accessToken = stored.accessToken;
+    refreshToken = stored.refreshToken;
+  }
+  initialized = true;
+}
+
+export function hasSession() {
+  return Boolean(accessToken || refreshToken);
+}
+
+async function applySession(session: { token: string; refresh_token: string }) {
+  accessToken = session.token;
+  refreshToken = session.refresh_token;
+  await saveSession({ accessToken: session.token, refreshToken: session.refresh_token });
+}
+
+async function dropSession() {
+  accessToken = null;
+  refreshToken = null;
+  await clearSession();
+}
+
+async function rawRequest<T>(path: string, options: RequestInit, withAuth: boolean): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("content-type", "application/json");
-  if (authToken) headers.set("authorization", `Bearer ${authToken}`);
+  if (withAuth && accessToken) headers.set("authorization", `Bearer ${accessToken}`);
   let lastError: Error | null = null;
   for (const apiUrl of API_URLS) {
     try {
       const response = await fetch(`${apiUrl}${path}`, { ...options, headers });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        lastError = new Error(typeof body?.error === "string" ? body.error : `api_${response.status}`);
-        if (response.status !== 404) throw lastError;
+        const error = new Error(typeof body?.error === "string" ? body.error : `api_${response.status}`);
+        (error as Error & { status?: number }).status = response.status;
+        lastError = error;
+        if (response.status !== 404) throw error;
         continue;
       }
       return body as T;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error("api_request_failed");
+      if ((lastError as Error & { status?: number }).status && (lastError as Error & { status?: number }).status !== 404) {
+        throw lastError;
+      }
     }
   }
   throw lastError ?? new Error("api_request_failed");
 }
 
-export async function verifyOtp(phone: string, code = "123456") {
-  const result = await request<{ token: string; supplier: unknown }>("/api/v1/auth/verify-otp", {
-    method: "POST",
-    body: JSON.stringify({ phone, code }),
-  });
-  authToken = result.token;
+/** Exchange the refresh token for a fresh access/refresh pair. Returns false if it cannot. */
+async function tryRefresh(): Promise<boolean> {
+  if (!refreshToken) return false;
+  try {
+    const next = await rawRequest<{ token: string; refresh_token: string }>(
+      "/api/v1/auth/refresh",
+      { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) },
+      false,
+    );
+    await applySession(next);
+    return true;
+  } catch {
+    await dropSession();
+    return false;
+  }
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  await initSession();
+  try {
+    return await rawRequest<T>(path, options, true);
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status;
+    if (status === 401 && (await tryRefresh())) {
+      return rawRequest<T>(path, options, true);
+    }
+    throw error;
+  }
+}
+
+// ---- Auth ----
+
+export async function requestOtp(phone: string, channel: "sms" | "whatsapp" = "sms") {
+  return rawRequest<{ expires_in: number; dev_code?: string }>(
+    "/api/v1/auth/request-otp",
+    { method: "POST", body: JSON.stringify({ phone, channel }) },
+    false,
+  );
+}
+
+export async function verifyOtp(phone: string, code: string) {
+  const result = await rawRequest<AuthSession>(
+    "/api/v1/auth/verify-otp",
+    { method: "POST", body: JSON.stringify({ phone, code }) },
+    false,
+  );
+  await applySession(result);
   return result;
 }
+
+export async function logout() {
+  await initSession();
+  if (refreshToken) {
+    await rawRequest("/api/v1/auth/logout", { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) }, false).catch(
+      () => undefined,
+    );
+  }
+  await dropSession();
+}
+
+/** Resolve when a usable session exists; throw "no_session" otherwise. Never auto-logs-in. */
+export async function ensureSession() {
+  await initSession();
+  if (accessToken) return;
+  if (await tryRefresh()) return;
+  throw new Error("no_session");
+}
+
+// ---- Resources ----
 
 export async function listJobs() {
   return request<{ jobs: ApiJob[]; total: number }>("/api/v1/jobs");
@@ -166,9 +265,4 @@ export async function uploadFile(uri: string, fileType: "profile_photo" | "trade
   });
   if (!response.ok) throw new Error(`upload_${response.status}`);
   return presign.public_url;
-}
-
-export async function ensureSession(phone: string) {
-  if (authToken) return;
-  await verifyOtp(phone || "+971501234567");
 }

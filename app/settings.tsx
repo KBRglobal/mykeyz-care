@@ -19,7 +19,7 @@ const rows = [
 ] as const;
 
 export default function SettingsScreen() {
-  const { state, resetApp, toggleSimpleMode } = useAppState();
+  const { state, resetApp, toggleSimpleMode, logout } = useAppState();
   const { provider } = state;
 
   return (
@@ -74,12 +74,19 @@ export default function SettingsScreen() {
           );
         })}
       </View>
-      <Card muted style={styles.logout}>
-        <LogOut color={theme.colors.destructive} size={21} />
-        <AppText variant="label" color={theme.colors.destructive}>
-          Log out
-        </AppText>
-      </Card>
+      <Pressable
+        onPress={async () => {
+          await logout();
+          router.replace("/(auth)");
+        }}
+      >
+        <Card muted style={styles.logout}>
+          <LogOut color={theme.colors.destructive} size={21} />
+          <AppText variant="label" color={theme.colors.destructive}>
+            Log out
+          </AppText>
+        </Card>
+      </Pressable>
       <Pressable
         onPress={() => {
           resetApp();

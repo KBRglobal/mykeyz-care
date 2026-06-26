@@ -5,6 +5,11 @@ import { activeJobs as initialActiveJobs, conversations as initialConversations,
 import { trackEvent } from "@/src/integrations/analytics";
 import {
   ensureSession,
+  hasSession,
+  initSession,
+  logout as apiLogout,
+  requestOtp as apiRequestOtp,
+  verifyOtp as apiVerifyOtp,
   completeJob as apiCompleteJob,
   getEarnings,
   getSupplier,
@@ -140,7 +145,7 @@ const initialState: AppState = {
   language: "en",
   simpleMode: false,
   provider,
-  supplierId: "supplier-demo",
+  supplierId: "",
   phone: "",
   selectedTradeKeys: ["painting", "cleaning"],
   selectedAreas: ["Dubai Marina", "Palm Jumeirah", "Downtown Dubai"],
@@ -440,6 +445,9 @@ type AppStateContextValue = {
   completeSetup: () => void;
   setLanguage: (language: string) => void;
   setPhone: (phone: string) => void;
+  requestOtp: (phone: string) => Promise<{ expires_in: number; dev_code?: string }>;
+  signIn: (phone: string, code: string) => Promise<ApiSupplier>;
+  logout: () => Promise<void>;
   toggleTrade: (tradeKey: string) => void;
   toggleArea: (area: string) => void;
   updateBusiness: (businessName: string, tradeLicenseNumber: string) => void;
@@ -473,39 +481,36 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState(state))).catch(() => undefined);
   }, [state]);
 
+  const loadAll = useCallback(async () => {
+    const [supplier, jobs, supplierJobs, earningsResult, conversationsResult] = await Promise.all([
+      getSupplier(),
+      listJobs(),
+      listSupplierJobs(),
+      getEarnings(),
+      listConversations(),
+    ]);
+    dispatch({ type: "setSupplier", supplier });
+    dispatch({ type: "setJobs", jobs: jobs.jobs.map(mapApiJob) });
+    dispatch({ type: "setActiveJobs", jobs: mapActiveJobs(supplierJobs.jobs) });
+    dispatch({ type: "setEarnings", earnings: mapApiEarnings(earningsResult) });
+    dispatch({ type: "setConversations", conversations: conversationsResult.conversations.map(mapApiConversation) });
+  }, []);
+
+  // On boot, restore a persisted session and hydrate from the API. Never auto-logs-in.
   useEffect(() => {
-    let active = true;
-    ensureSession(state.phone)
-      .then(async () => {
-        const [supplier, jobs, supplierJobs, earningsResult, conversationsResult] = await Promise.all([
-          getSupplier(),
-          listJobs(),
-          listSupplierJobs(),
-          getEarnings(),
-          listConversations(),
-        ]);
-        return { supplier, jobs, supplierJobs, earningsResult, conversationsResult };
-      })
-      .then((result) => {
-        if (!active) return;
-        dispatch({ type: "setSupplier", supplier: result.supplier });
-        dispatch({ type: "setJobs", jobs: result.jobs.jobs.map(mapApiJob) });
-        dispatch({ type: "setActiveJobs", jobs: mapActiveJobs(result.supplierJobs.jobs) });
-        dispatch({ type: "setEarnings", earnings: mapApiEarnings(result.earningsResult) });
-        dispatch({ type: "setConversations", conversations: result.conversationsResult.conversations.map(mapApiConversation) });
+    initSession()
+      .then(() => {
+        if (hasSession()) return loadAll();
       })
       .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [state.phone]);
+  }, [loadAll]);
 
   const revealPrice = useCallback(
     (jobId: string) => {
       if (state.revealedJobIds.includes(jobId)) return true;
       if (state.revealCredits <= 0) return false;
       dispatch({ type: "revealPrice", jobId });
-      ensureSession(state.phone)
+      ensureSession()
         .then(() => apiRevealPrice(jobId))
         .then((result) => dispatch({ type: "setRevealCredits", amount: result.reveals_remaining }))
         .catch(() => undefined);
@@ -521,12 +526,24 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       completeSetup: () => dispatch({ type: "completeSetup" }),
       setLanguage: (language) => dispatch({ type: "setLanguage", language }),
       setPhone: (phone) => dispatch({ type: "setPhone", phone }),
+      requestOtp: (phone) => apiRequestOtp(phone),
+      signIn: async (phone, code) => {
+        const result = await apiVerifyOtp(phone, code);
+        dispatch({ type: "setSupplier", supplier: result.supplier });
+        dispatch({ type: "setPhone", phone: result.supplier.phone });
+        await loadAll().catch(() => undefined);
+        return result.supplier;
+      },
+      logout: async () => {
+        await apiLogout();
+        dispatch({ type: "reset" });
+      },
       toggleTrade: (tradeKey) => dispatch({ type: "toggleTrade", tradeKey }),
       toggleArea: (area) => dispatch({ type: "toggleArea", area }),
       updateBusiness: (businessName, tradeLicenseNumber) =>
         {
           dispatch({ type: "updateBusiness", businessName, tradeLicenseNumber });
-          ensureSession(state.phone)
+          ensureSession()
             .then(() => apiUpdateSupplier({ full_name: businessName }))
             .then((supplier) => dispatch({ type: "setSupplier", supplier }))
             .catch(() => undefined);
@@ -534,7 +551,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       updateBank: (bankIban, accountHolder) => dispatch({ type: "updateBank", bankIban, accountHolder }),
       sendQuote: (jobId, amount) => {
         dispatch({ type: "sendQuote", jobId, amount });
-        ensureSession(state.phone)
+        ensureSession()
           .then(() => submitQuote(jobId, amount))
           .catch(() => undefined);
         trackEvent("quote_sent", { jobId, amount });
@@ -544,7 +561,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       completeJob: (jobId) => {
         dispatch({ type: "completeJob", jobId });
         if (jobId) {
-          ensureSession(state.phone)
+          ensureSession()
             .then(() => apiCompleteJob(jobId))
             .then(() => listSupplierJobs())
             .then((result) => dispatch({ type: "setActiveJobs", jobs: mapActiveJobs(result.jobs) }))
@@ -562,14 +579,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       },
       addGalleryImage: (uri) => {
         dispatch({ type: "addGalleryImage", uri });
-        ensureSession(state.phone)
+        ensureSession()
           .then(() => uploadFile(uri, "work_photo"))
           .then((publicUrl) => dispatch({ type: "addGalleryImage", uri: publicUrl }))
           .catch(() => undefined);
       },
       loadMessages: async (conversationId) => {
         try {
-          await ensureSession(state.phone);
+          await ensureSession();
           const result = await listMessages(conversationId);
           dispatch({ type: "setMessages", conversationId, messages: result.messages.map(mapApiMessage) });
         } catch {
@@ -599,7 +616,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         };
         dispatch({ type: "appendMessage", conversationId, message: localMessage });
         try {
-          await ensureSession(state.phone);
+          await ensureSession();
           const saved = await apiSendMessage(conversationId, body, state.language);
           dispatch({ type: "appendMessage", conversationId, message: mapApiMessage(saved) });
         } catch {
@@ -608,7 +625,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       },
       resetApp: () => dispatch({ type: "reset" }),
     }),
-    [revealPrice, state],
+    [revealPrice, state, loadAll],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

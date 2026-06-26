@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { useRef, useState } from "react";
 import { StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
 import { BackHeader } from "@/src/components/ui/BackHeader";
 import { AppText } from "@/src/components/ui/AppText";
@@ -7,11 +8,59 @@ import { Screen } from "@/src/components/ui/Screen";
 import { theme } from "@/src/theme/tokens";
 import { useAppState } from "@/src/state/AppState";
 
+const ERRORS: Record<string, string> = {
+  otp_expired: "Code expired, request a new one",
+  invalid_otp: "Incorrect code",
+  otp_blocked: "Too many attempts",
+};
+
 export default function OtpScreen() {
   const { width } = useWindowDimensions();
-  const { state } = useAppState();
+  const { state, signIn } = useAppState();
   const contentWidth = Math.max(280, Math.min(width - theme.spacing.pageX * 2, 382));
   const cellSize = Math.floor((contentWidth - 5 * 8) / 6);
+  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
+  const [error, setError] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const inputs = useRef<Array<TextInput | null>>([]);
+
+  const handleChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    setDigits((current) => {
+      const next = [...current];
+      next[index] = digit;
+      return next;
+    });
+    if (digit && index < 5) inputs.current[index + 1]?.focus();
+  };
+
+  const handleKeyPress = (index: number, key: string) => {
+    if (key === "Backspace" && !digits[index] && index > 0) {
+      inputs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleVerify = async () => {
+    if (verifying) return;
+    const code = digits.join("");
+    if (code.length < 6) {
+      setError("Enter the 6-digit code");
+      return;
+    }
+    setError("");
+    setVerifying(true);
+    try {
+      await signIn(state.phone, code);
+      router.replace("/(setup)/trade");
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "invalid_otp";
+      setError(ERRORS[message] ?? "Incorrect code");
+      setDigits(["", "", "", "", "", ""]);
+      inputs.current[0]?.focus();
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   return (
     <Screen scroll={false} style={styles.root}>
@@ -20,21 +69,27 @@ export default function OtpScreen() {
         <View>
           <AppText variant="heading">Verification</AppText>
           <AppText color={theme.colors.mutedForeground}>
-            We sent a 6-digit code to +971 {state.phone || "50 123 4567"}.
+            We sent a 6-digit code to {state.phone || "+971 50 123 4567"}.
           </AppText>
         </View>
         <View style={styles.otp}>
-          {["5", "2", "9", "", "", ""].map((value, index) => (
+          {digits.map((value, index) => (
             <TextInput
               key={index}
-              defaultValue={value}
+              ref={(node) => {
+                inputs.current[index] = node;
+              }}
+              value={value}
+              onChangeText={(text) => handleChange(index, text)}
+              onKeyPress={({ nativeEvent }) => handleKeyPress(index, nativeEvent.key)}
               keyboardType="number-pad"
               maxLength={1}
               style={[styles.otpCell, { width: cellSize }, value ? styles.filled : null]}
             />
           ))}
         </View>
-        <Button label="Verify code" onPress={() => router.push("/(setup)/trade")} />
+        {error ? <AppText color={theme.colors.destructive}>{error}</AppText> : null}
+        <Button label={verifying ? "Verifying..." : "Verify code"} onPress={handleVerify} />
         <AppText variant="eyebrow" align="center">
           Resend code in 00:45
         </AppText>

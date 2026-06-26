@@ -9,8 +9,26 @@ import { useAppState } from "@/src/state/AppState";
 import { theme } from "@/src/theme/tokens";
 
 export default function PhoneScreen() {
-  const { state, setPhone } = useAppState();
+  const { state, setPhone, requestOtp } = useAppState();
   const [phone, updatePhone] = useState(state.phone || "");
+  const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleContinue = async () => {
+    if (sending) return;
+    const full = "+971" + phone.replace(/\D/g, "");
+    setError("");
+    setSending(true);
+    setPhone(full);
+    try {
+      await requestOtp(full);
+      router.push("/(setup)/otp");
+    } catch {
+      setError("Could not send the code. Check the number and try again.");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <Screen scroll={false} style={styles.root} contentStyle={styles.content}>
@@ -40,13 +58,10 @@ export default function PhoneScreen() {
             style={styles.phone}
           />
         </View>
-        <Button
-          label="Continue"
-          onPress={() => {
-            setPhone(phone);
-            router.push("/(setup)/otp");
-          }}
-        />
+        {error ? (
+          <AppText color={theme.colors.destructive}>{error}</AppText>
+        ) : null}
+        <Button label={sending ? "Sending..." : "Continue"} onPress={handleContinue} />
       </View>
       <AppText variant="eyebrow" align="center" style={styles.legal}>
         By continuing, you agree to the Service Terms and Privacy Policy

@@ -23,8 +23,8 @@ What is not real enough:
 
 - `src/data/mock.ts` still drives trades, jobs, active jobs, conversations, plans, provider defaults, notifications, and earnings references.
 - `AppState.tsx` still merges API responses with mock fallbacks and local-only state.
-- Auth token is kept in memory only in `src/services/api.ts`; app restart does not restore a real session.
-- OTP uses fixed backend codes, not real SMS/WhatsApp.
+- Auth tokens (access + refresh) are now persisted in `expo-secure-store`; the app restores its session on restart and auto-refreshes on a 401. (Sprint 1)
+- OTP verification is real (hashed, expiring, rate-limited); fixed dev codes only appear when the backend runs with `ALLOW_DEV_OTP`. Real OTP delivery (SMS/WhatsApp) is still not wired. (Sprint 1)
 - Several actions update local state optimistically without a full backend contract.
 - Visual screens are not yet guaranteed to represent all backend states: pending verification, rejection, quote lost, expired job, no credits, failed upload, no network, payment failed.
 
@@ -41,10 +41,11 @@ What exists:
 
 What is not real enough:
 
-- `auth/verify-otp` accepts fixed codes `123456` and `000000`.
-- `upsertSupplierPhone` always writes the `supplier-demo` ID instead of creating real supplier identities.
-- Database schema is created inline in `initializeDatabase`; no migration system exists.
-- Seed data is always created as part of initialization.
+- `auth/verify-otp` now verifies a hashed, expiring OTP with attempt rate limiting; the fixed codes `123456`/`000000` are gated behind `ALLOW_DEV_OTP` (default off). (Sprint 1)
+- Suppliers now get unique real identities via `supplier_users`; the forced `supplier-demo` writer is gone from the core auth path. (Sprint 1)
+- Sessions and refresh tokens now exist (`sessions` table) with `auth/refresh` and `auth/logout`. (Sprint 1)
+- Database schema is still created inline in `initializeDatabase`; no migration system exists.
+- Demo seed data is now gated behind `SEED_DEMO_DATA` (default off). (Sprint 1)
 - Earnings endpoint is hardcoded, not ledger-based.
 - Job creation from customer inspections does not exist in this API.
 - Customer selection of winning quote does not exist.
@@ -52,6 +53,11 @@ What is not real enough:
 - Audit logs do not exist.
 - Role boundaries are not complete.
 - Redis is not yet used for OTP, rate limits, queues, or deduplication.
+
+Still open after Sprint 1:
+
+- Real OTP delivery (SMS/WhatsApp provider) is not wired yet; codes are generated and verified but not sent. (Sprint 7)
+- A migration framework is still pending; the schema is created idempotently inline rather than through versioned migrations.
 
 ## Database Reality
 
@@ -63,11 +69,13 @@ Existing tables:
 - `reveals`
 - `conversations`
 - `messages`
+- `supplier_users` (Sprint 1)
+- `otp_attempts` (Sprint 1)
+- `sessions` (Sprint 1)
 
 Missing production structures:
 
-- supplier users and worker accounts
-- OTP/session/refresh token storage
+- worker accounts (supplier users now exist via `supplier_users`)
 - supplier documents
 - verification reviews
 - service categories and service areas
