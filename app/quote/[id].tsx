@@ -17,8 +17,21 @@ export default function SubmitQuoteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state, sendQuote } = useAppState();
   const job = state.jobs.find((item) => item.id === id) ?? state.jobs[0];
-  const insight = getPriceInsight(job);
-  const [amount, setAmount] = useState(String(job.quote ?? insight.recommended));
+  const isApproved = state.verificationStatus === "approved";
+  const insight = job ? getPriceInsight(job) : { low: 0, high: 0, win: 0, recommended: 0, marginAfterFee: 0 };
+  const [amount, setAmount] = useState(job ? String(job.quote ?? insight.recommended) : "0");
+
+  if (!job) {
+    return (
+      <Screen>
+        <ArrowLeft color={theme.colors.primary} size={26} onPress={() => router.back()} />
+        <View style={styles.header}>
+          <AppText variant="heading">Job not available</AppText>
+          <AppText color={theme.colors.mutedForeground}>This job is no longer in your matched feed.</AppText>
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -88,13 +101,23 @@ export default function SubmitQuoteScreen() {
           </AppText>
         </Pressable>
       </Card>
-      <Button
-        label={`Send quote • AED ${amount || "0"}`}
-        onPress={() => {
-          sendQuote(job.id, Number(amount) || 0);
-          router.replace(`/quote-success?id=${job.id}`);
-        }}
-      />
+      {isApproved ? (
+        <Button
+          label={`Send quote • AED ${amount || "0"}`}
+          onPress={() => {
+            sendQuote(job.id, Number(amount) || 0);
+            router.replace(`/quote-success?id=${job.id}`);
+          }}
+        />
+      ) : (
+        <Card muted style={styles.gate}>
+          <AppText variant="label">Verification required</AppText>
+          <AppText color={theme.colors.mutedForeground}>
+            You need an approved verification before you can send quotes.
+          </AppText>
+          <Button label="Get verified" tone="secondary" onPress={() => router.push("/(tabs)")} />
+        </Card>
+      )}
     </Screen>
   );
 }
@@ -143,6 +166,9 @@ const styles = StyleSheet.create({
   hint: {
     gap: 12,
     marginBottom: 20,
+  },
+  gate: {
+    gap: 12,
   },
   hintTop: {
     alignItems: "center",

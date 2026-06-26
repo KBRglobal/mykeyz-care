@@ -118,6 +118,7 @@ type AppState = {
   earnings: EarningsState;
   quotesSent: number;
   completedJobs: number;
+  quoteError: string | null;
 };
 
 type Action =
@@ -137,6 +138,8 @@ type Action =
   | { type: "setMessages"; conversationId: string; messages: ChatMessage[] }
   | { type: "appendMessage"; conversationId: string; message: ChatMessage }
   | { type: "sendQuote"; jobId: string; amount: number }
+  | { type: "revertQuote"; jobId: string }
+  | { type: "setQuoteError"; error: string | null }
   | { type: "revealPrice"; jobId: string }
   | { type: "setRevealCredits"; amount: number }
   | { type: "buyCredits"; amount: number }
@@ -159,11 +162,8 @@ const initialState: AppState = {
   tradeLicenseNumber: "",
   verificationStatus: "draft",
   licenseDocUrl: null,
-  jobs: initialJobs.map((job, index) => ({
-    ...job,
-    status: "new",
-    competitorPrice: [380, 230, 325][index] ?? Math.max(120, job.estimate - 80),
-  })),
+  // The feed is API-driven (matched jobs only) — never seed it from mock data.
+  jobs: [],
   activeJobs: initialActiveJobs,
   conversations: initialConversations,
   messages: {},
@@ -182,17 +182,17 @@ const initialState: AppState = {
   },
   quotesSent: 0,
   completedJobs: 0,
+  quoteError: null,
 };
 
 function restoreState(stored: Partial<AppState>): AppState {
-  const restoredJobs = initialState.jobs.map((initialJob) => {
-    const storedJob = stored.jobs?.find((job) => job.id === initialJob.id);
-    return {
-      ...initialJob,
-      ...storedJob,
-      icon: initialJob.icon,
-    };
-  });
+  // Jobs are API-driven now; persisted jobs lose their (function) icon on
+  // serialize, so re-attach a fallback icon by position. listJobs() refreshes
+  // them on boot.
+  const restoredJobs = (stored.jobs ?? []).map((job, index) => ({
+    ...job,
+    icon: initialJobs[index % initialJobs.length].icon,
+  }));
 
   return {
     ...initialState,
@@ -224,7 +224,7 @@ function serializeState(state: AppState) {
 }
 
 function mapApiJob(job: ApiJob, index: number): ProviderJob {
-  const fallback = initialState.jobs[index % initialState.jobs.length];
+  const fallback = initialJobs[index % initialJobs.length];
   return {
     id: job.id,
     title: job.service_type,
@@ -383,6 +383,7 @@ function reducer(state: AppState, action: Action): AppState {
       };
       return {
         ...state,
+        quoteError: null,
         quotesSent: alreadyQuoted ? state.quotesSent : state.quotesSent + 1,
         sentQuotes: [quote, ...state.sentQuotes.filter((item) => item.jobId !== action.jobId)],
         jobs: state.jobs.map((job) =>
@@ -390,6 +391,17 @@ function reducer(state: AppState, action: Action): AppState {
         ),
       };
     }
+    case "revertQuote":
+      return {
+        ...state,
+        quotesSent: Math.max(0, state.quotesSent - 1),
+        sentQuotes: state.sentQuotes.filter((item) => item.jobId !== action.jobId),
+        jobs: state.jobs.map((job) =>
+          job.id === action.jobId ? { ...job, status: "new", quote: undefined } : job,
+        ),
+      };
+    case "setQuoteError":
+      return { ...state, quoteError: action.error };
     case "revealPrice":
       if (state.revealedJobIds.includes(action.jobId)) return state;
       if (state.revealCredits <= 0) return state;
@@ -590,10 +602,26 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         trackEvent("onboarding_completed", {});
       },
       sendQuote: (jobId, amount) => {
+        // Gate: unapproved suppliers can never quote — surface a flag, skip the API.
+        if (state.verificationStatus !== "approved") {
+          dispatch({ type: "setQuoteError", error: "not_verified" });
+          trackEvent("quote_blocked", { jobId, reason: "not_verified" });
+          return;
+        }
         dispatch({ type: "sendQuote", jobId, amount });
         ensureSession()
           .then(() => submitQuote(jobId, amount))
-          .catch(() => undefined);
+          .then((result) => {
+            if (!result.ok) {
+              // 403 (not_verified / not_matched) → roll back the optimistic quote.
+              if (result.status === 403) dispatch({ type: "revertQuote", jobId });
+              dispatch({ type: "setQuoteError", error: result.error });
+            }
+          })
+          .catch(() => {
+            dispatch({ type: "revertQuote", jobId });
+            dispatch({ type: "setQuoteError", error: "request_failed" });
+          });
         trackEvent("quote_sent", { jobId, amount });
       },
       revealPrice,

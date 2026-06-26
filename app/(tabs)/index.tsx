@@ -15,12 +15,10 @@ import { theme } from "@/src/theme/tokens";
 export default function HomeScreen() {
   const { t } = useTranslation();
   const { state } = useAppState();
-  const selectedTrades = state.selectedTradeKeys.map((key) => key.toLowerCase());
-  const newJobs = state.jobs.filter((job) => {
-    const tradeMatch = selectedTrades.some((trade) => job.trade.toLowerCase().includes(trade) || trade.includes(job.trade.toLowerCase()));
-    const areaMatch = state.selectedAreas.includes(job.area);
-    return job.status === "new" && (tradeMatch || areaMatch);
-  });
+  // The API already returns only jobs matched to this supplier's trades & areas,
+  // so the feed renders straight from state.jobs — no local filtering needed.
+  const newJobs = state.jobs.filter((job) => job.status === "new");
+  const isApproved = state.verificationStatus === "approved";
   const activeCount = state.activeJobs.filter((job) => !job.completed).length;
   const availabilityCount = Object.values(state.availability).reduce((sum, slots) => sum + slots.length, 0);
 
@@ -89,6 +87,11 @@ export default function HomeScreen() {
           Upgrade visibility
         </AppText>
       </View>
+      {!isApproved ? (
+        <AppText variant="label" color={theme.colors.mutedForeground} style={styles.verifyNote}>
+          Get verified before you can send quotes on these jobs.
+        </AppText>
+      ) : null}
       <View style={styles.sectionHeader}>
         <AppText variant="eyebrow">{t("nearYou")}</AppText>
         <AppText variant="eyebrow" color={theme.colors.accent}>
@@ -96,9 +99,18 @@ export default function HomeScreen() {
         </AppText>
       </View>
       <View style={styles.list}>
-        {newJobs.slice(0, 2).map((job) => (
-          <OpportunityCard key={job.id} job={job} onPress={() => router.push(`/job/${job.id}`)} />
-        ))}
+        {newJobs.length === 0 ? (
+          <Card muted style={styles.empty}>
+            <AppText variant="title">No matched jobs yet</AppText>
+            <AppText color={theme.colors.mutedForeground}>
+              We'll notify you when a job fits your trades & areas.
+            </AppText>
+          </Card>
+        ) : (
+          newJobs.slice(0, 2).map((job) => (
+            <OpportunityCard key={job.id} job={job} onPress={() => router.push(`/job/${job.id}`)} />
+          ))
+        )}
       </View>
     </Screen>
   );
@@ -123,6 +135,12 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 16,
+  },
+  verifyNote: {
+    marginBottom: 16,
+  },
+  empty: {
+    gap: 6,
   },
   simpleHero: {
     gap: 8,

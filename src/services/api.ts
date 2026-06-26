@@ -11,6 +11,7 @@ let initialized = false;
 
 export type ApiJob = {
   id: string;
+  source: "inspection" | "care_hub" | "admin";
   service_type: string;
   trade_category: string;
   location_area: string;
@@ -19,9 +20,34 @@ export type ApiJob = {
   estimated_value_min: number;
   estimated_value_max: number;
   job_type: "instant" | "tender";
-  status: "open" | "in_progress" | "completed";
+  status: "open" | "in_progress" | "completed" | "expired";
   competitor_amount: number;
+  quote_deadline: string | null;
   created_at: string;
+  updated_at?: string;
+  // Present on the /jobs feed (matched jobs) — optional on the shared shape.
+  rank_score?: number;
+  has_quoted?: boolean;
+};
+
+export type ApiJobFinding = {
+  id: string;
+  job_id: string;
+  room: string;
+  finding_type: string;
+  description: string;
+  severity: "low" | "medium" | "high";
+  photo_url: string | null;
+  created_at: string;
+};
+
+export type ApiJobDetail = {
+  job: ApiJob;
+  findings: ApiJobFinding[];
+  inspection_insight: { available: boolean; defects: ApiJobFinding[] };
+  quote_count: number;
+  my_quote: unknown | null;
+  can_quote: boolean;
 };
 
 export type VerificationStatus = "draft" | "submitted" | "needs_changes" | "approved" | "rejected" | "suspended";
@@ -211,7 +237,11 @@ export async function ensureSession() {
 // ---- Resources ----
 
 export async function listJobs() {
-  return request<{ jobs: ApiJob[]; total: number }>("/api/v1/jobs");
+  return request<{ jobs: ApiJob[]; total: number; page?: number }>("/api/v1/jobs");
+}
+
+export async function getJobDetail(jobId: string) {
+  return request<ApiJobDetail>(`/api/v1/jobs/${jobId}`);
 }
 
 export async function getSupplier() {
@@ -293,11 +323,36 @@ export async function sendMessage(conversationId: string, body: string, language
   });
 }
 
-export async function submitQuote(jobId: string, amount: number) {
-  return request(`/api/v1/jobs/${jobId}/quotes`, {
-    method: "POST",
-    body: JSON.stringify({ amount, availability: "tomorrow", note: "Sent from MyKeyz Care" }),
-  });
+export type SubmitQuoteResult =
+  | { ok: true; status: number; quote: unknown }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Posts a quote. Never throws — returns a result the caller can branch on so it
+ * can detect 403 not_verified / not_matched, 409 job_closed / already_quoted, etc.
+ * The server's error body (`error` field) is preserved on `result.error`.
+ */
+export async function submitQuote(
+  jobId: string,
+  amount: number,
+  extra?: { availability?: string; available_date?: string; note?: string },
+): Promise<SubmitQuoteResult> {
+  try {
+    const quote = await request(`/api/v1/jobs/${jobId}/quotes`, {
+      method: "POST",
+      body: JSON.stringify({
+        amount,
+        availability: extra?.availability ?? "tomorrow",
+        ...(extra?.available_date ? { available_date: extra.available_date } : {}),
+        note: extra?.note ?? "Sent from MyKeyz Care",
+      }),
+    });
+    return { ok: true, status: 201, quote };
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status ?? 0;
+    const message = error instanceof Error ? error.message : "request_failed";
+    return { ok: false, status, error: message };
+  }
 }
 
 export async function revealPrice(jobId: string) {

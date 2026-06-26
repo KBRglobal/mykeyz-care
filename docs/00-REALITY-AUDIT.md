@@ -50,9 +50,10 @@ What is not real enough:
 - Database schema is still created inline in `initializeDatabase`; no migration system exists.
 - Demo seed data is now gated behind `SEED_DEMO_DATA` (default off). (Sprint 1)
 - Earnings endpoint is hardcoded, not ledger-based.
-- Job creation from customer inspections does not exist in this API.
+- Jobs are now real, matched supply. `GET /api/v1/jobs` (supplier auth) returns ONLY jobs matched to the calling supplier — their trades + service areas, open and not past deadline, ranked — each item carrying `rank_score` and `has_quoted`. `GET /api/v1/jobs/:id` returns the job with its inspection `findings` plus an `inspection_insight`, `quote_count`, `my_quote`, and `can_quote`, and 404s if the supplier is not matched (and has no prior quote). A job's `source` is `inspection`, `care_hub`, or `admin`; jobs are created in the `/admin` Control Panel, not yet directly from live customer inspections in this API. (Sprint 4)
+- Quoting is now gated. `POST /api/v1/jobs/:id/quotes` returns 403 `not_verified` unless the supplier's `verification_status === 'approved'`, 403 `not_matched` if the supplier is not matched, 409 `job_closed` if the job is not open or past its deadline, 409 `already_quoted` on a repeat, and 201 with the quote on success. Approving a supplier recomputes their matches so they immediately see fitting open jobs; unapproved suppliers are never matched. (Sprint 4)
 - Customer selection of winning quote does not exist.
-- Admin endpoints now exist for the verification slice: `/api/v1/admin` login (rate-limited, constant-time), supplier list/detail, approve/reject/request-changes, and audit-logs, all gated by an admin JWT (`role === 'admin'`); endpoints for jobs, money, and chat admin views do not exist yet (later sprints / Milestone 10). (Sprint 3)
+- Admin endpoints now exist for the verification slice: `/api/v1/admin` login (rate-limited, constant-time), supplier list/detail, approve/reject/request-changes, and audit-logs, all gated by an admin JWT (`role === 'admin'`); the admin jobs slice now exists too — `POST /api/v1/admin/jobs` creates a job with `findings` (returning `match_count`) and `GET /api/v1/admin/jobs` lists jobs with `finding_count`, `match_count`, and `quote_count` (Sprint 4); endpoints for money and chat admin views do not exist yet (later sprints / Milestone 10). (Sprint 3)
 - Audit logs now exist (`audit_logs`); every verification decision writes one. (Sprint 3)
 - Role boundaries are not complete.
 - Redis is not yet used for OTP, rate limits, queues, or deduplication.
@@ -88,8 +89,8 @@ Missing production structures:
 - supplier documents (now exist via `supplier_documents`; trade license is captured here) (Sprint 2)
 - verification reviews (now exist via `verification_reviews`; the `verification_status` state machine extends to `submitted -> approved/rejected/needs_changes` via admin review) (Sprint 3)
 - service categories and service areas (multi-trade + multi-area now exist via `supplier_trades` / `supplier_service_areas`) (Sprint 2)
-- inspection findings
-- job matching records
+- inspection findings (now exist; findings are stored per job and returned via `GET /api/v1/jobs/:id` and its `inspection_insight`) (Sprint 4)
+- job matching records (now exist; a job materialises supplier matches at creation, the provider feed is matched-only on trade + area, and matches recompute when a supplier is approved) (Sprint 4)
 - quote events
 - reveal credit ledger and reveal events
 - availability slots
@@ -117,7 +118,7 @@ What exists:
 What is not real enough:
 
 - External TestFlight is waiting for Apple Beta Review.
-- An admin Control Panel now exists, served at `/admin` (secure password login -> admin JWT), with a verification queue: operators approve / reject / request-changes on suppliers (a reason is required for reject and request-changes) without DB edits, every decision writes `verification_reviews` + `audit_logs`, and the supplier app reflects the new status. This is the verification slice only — full backoffice for jobs, money, chat, and dispute resolution is later sprints / Milestone 10. (Sprint 3)
+- An admin Control Panel now exists, served at `/admin` (secure password login -> admin JWT), with a verification queue: operators approve / reject / request-changes on suppliers (a reason is required for reject and request-changes) without DB edits, every decision writes `verification_reviews` + `audit_logs`, and the supplier app reflects the new status. This is the verification slice only. A jobs slice now also exists in the Control Panel: an operator creates a job with inspection findings and lists jobs with their match and quote counts (Sprint 4). Full backoffice for money, chat, and dispute resolution is later sprints / Milestone 10. (Sprint 3)
 - No production monitoring contract is documented.
 - No incident or rollback procedure exists beyond the TestFlight runbook.
 - No data backup verification procedure is documented.

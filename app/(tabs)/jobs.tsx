@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { JobCard } from "@/src/components/product/JobCard";
 import { AppText } from "@/src/components/ui/AppText";
 import { Button } from "@/src/components/ui/Button";
+import { Card } from "@/src/components/ui/Card";
 import { Header } from "@/src/components/ui/Header";
 import { Screen } from "@/src/components/ui/Screen";
 import { useAppState } from "@/src/state/AppState";
@@ -24,9 +25,16 @@ export default function JobsScreen() {
       </View>
       <Button label="Optimize route" tone="accent" style={styles.routeButton} onPress={() => router.push("/route-plan")} />
       <View style={styles.list}>
-        {activeJobs.map((job) => (
-          <JobCard key={job.id} job={job} />
-        ))}
+        {activeJobs.length === 0 ? (
+          <Card muted style={styles.empty}>
+            <AppText variant="title">No active jobs yet</AppText>
+            <AppText color={theme.colors.mutedForeground}>
+              Jobs you win will appear here, ready to schedule and complete.
+            </AppText>
+          </Card>
+        ) : (
+          activeJobs.map((job) => <JobCard key={job.id} job={job} />)
+        )}
       </View>
     </Screen>
   );
@@ -64,6 +72,9 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 16,
+  },
+  empty: {
+    gap: 6,
   },
   routeButton: {
     marginBottom: 16,
