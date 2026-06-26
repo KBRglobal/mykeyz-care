@@ -303,9 +303,36 @@ All keys are read from `process.env.*` only. Never printed, logged, committed, o
 
 ---
 
-## 8. MyKeyz-side TODO (Phase C)
+## 8. MyKeyz-side (Phase C) — IMPLEMENTED on branch `feat/care-bridge`
 
-What the main MyKeyz app must build to complete the bridge:
+Status: the MyKeyz side below is BUILT and verified end-to-end against a live Care backend (21/21 bridge
+E2E checks: defect → `/v1/vendors/quote` → queued push → Care job (trade+area mapped, supplier matched)
+→ supplier quote → signed return webhook → `care_quotes` + inbox `care_offers` → tenant select → Care
+`assigned`, quote `won`). Not yet deployed — gated on QA + Railway env.
+
+MyKeyz-side files (repo `/Users/claude/Documents/mykeyz`):
+- `backend/src/services/careBridge.ts` — `pushLeadToCare` (trade map MyKeyz→Care + severity + area
+  derivation, signed POST, idempotent) and `selectCareQuote`. Bridge enabled only when
+  `CARE_INGEST_URL` + `CARE_INGEST_KEY` are set.
+- `backend/src/services/careJobHandlers.ts` + `jobHandlers.ts` — `care_push_lead` queue handler (retried).
+- `backend/src/migrations/0150_care_bridge.sql` — `service_leads.care_*` columns + `care_quotes` table.
+- `backend/src/routes/careWebhook.ts` — root-mounted `POST /webhooks/care`, HMAC-verified, upserts
+  `care_quotes` + posts the inbox `care_offers` message.
+- `backend/src/routes/vendors.ts` — `/vendors/quote` accepts a direct `issueId`; `GET
+  /v1/vendors/leads/:id/care-quotes` + `POST /v1/vendors/leads/:id/select-care`.
+- `backend/src/services/serviceMarketplace.ts` — `requestQuote` enqueues the Care push and skips the
+  legacy demo-vendor offers when the bridge is enabled (flag-gated cutover; the demo `service_partners`
+  path stays dormant until the bridge is proven in prod, then removed).
+- Mobile: `src/services/vendors.ts` (`requestQuote({issueId})`, `getCareQuotes`, `selectCareQuote`),
+  `app/(inspection)/edit-defect.tsx` ("Get a professional" + consent sheet),
+  `app/(main)/inbox.tsx` (`care_offers` rendering + select).
+
+Known infra note (NOT a bridge bug): a fresh local DB can't run the app's migration runner because its
+CONCURRENTLY-path naive `;`-split breaks a later `$$ … $$` DO-block migration (prod is unaffected — warm
+DB). Worked around for local E2E by applying migrations via `psql` (which parses `$$`) and recording them
+in `_migrations`. Worth a separate SYSTEMS fix to the runner's splitter.
+
+### Original design checklist (now implemented above)
 
 1. **Trade mapping.** Map each MyKeyz defect/issue category to a Care `trade_category`
    (e.g. `paint_damage` → `painting`) and resolve `location_area` from the property

@@ -87,16 +87,16 @@ Care has no organic jobs (today jobs exist only when the owner hand-types them i
 
 > Touches the LIVE main app. Build on a branch, never auto-deploy. Surfaced as its own gated step.
 
-- [ ] C1 backend: `issue.category → Care trade` mapping; in `serviceMarketplace.requestQuote`, after the
+- [x] C1 backend: `issue.category → Care trade` mapping; in `serviceMarketplace.requestQuote`, after the
       `service_lead` insert, PUSH to Care ingest (timedFetch + key + HMAC); store `care_job_id`/`public_ref`
       on the lead; retry via the existing job queue on failure (lead still created locally).
-- [ ] C2 backend: receive Care return webhook (`POST /v1/care/webhook`, verify HMAC) → upsert a `vendor_bid`
+- [x] C2 backend: receive Care return webhook (`POST /v1/care/webhook`, verify HMAC) → upsert a `vendor_bid`
       (+ status) on the lead; expose lead quotes to the app; selection endpoint → push select-by-ref to Care.
-- [ ] C3 mobile: "Get a professional" action on the defect card (review-findings / edit-defect) → existing
+- [x] C3 mobile: "Get a professional" action on the defect card (review-findings / edit-defect) → existing
       consent → `requestQuote(issueId)`; inbox shows Care quotes; tenant selects → push selection.
-- [ ] C4 deprecate the local demo vendor stub (stop seeding `service_partners` demo rows; `vendor_bids`
+- [x] C4 deprecate the local demo vendor stub (stop seeding `service_partners` demo rows; `vendor_bids`
       become Care-backed). Per destroy-superseded; behind a flag if a phased cutover is safer.
-- [ ] C5 verify on a branch (both backends local, end-to-end defect→job→quote→return→select); Moshe QA;
+- [x] C5 verify on a branch (both backends local, end-to-end defect→job→quote→return→select); Moshe QA;
       then gated deploy.
 
 ## Acceptance
