@@ -14,8 +14,8 @@ export default function JobCompleteScreen() {
   const { state, completeJob } = useAppState();
   const job = state.activeJobs.find((item) => item.id === id) ?? state.activeJobs.find((item) => !item.completed) ?? state.activeJobs[0];
   const gross = job?.price ?? 0;
-  const fee = Math.round(gross * 0.1);
-  const payout = gross - fee;
+  const commission = Math.round(gross * 0.1);
+  const net = gross - commission;
 
   return (
     <Screen>
@@ -26,28 +26,31 @@ export default function JobCompleteScreen() {
         </View>
         <AppText variant="eyebrow">Job completed</AppText>
         <AppText variant="heading" align="center">
-          Payout Summary
+          Earnings Summary
         </AppText>
       </View>
       <Card muted style={styles.summary}>
         <View style={styles.line}>
-          <AppText variant="eyebrow">Gross amount</AppText>
+          <AppText variant="eyebrow">Paid by customer</AppText>
           <AppText variant="label">AED {gross}.00</AppText>
         </View>
         <View style={styles.line}>
-          <AppText variant="eyebrow">MyKeyz fee • 10%</AppText>
-          <AppText variant="label" color={theme.colors.destructive}>
-            - AED {fee}.00
+          <AppText variant="eyebrow">Commission owed to MyKeyz • 10%</AppText>
+          <AppText variant="label" color={theme.colors.warning}>
+            AED {commission}.00
           </AppText>
         </View>
         <View style={styles.divider} />
         <View style={styles.line}>
-          <AppText variant="label">Total payout</AppText>
+          <AppText variant="label">You keep</AppText>
           <AppText variant="title" color={theme.colors.accent}>
-            AED {payout}.00
+            AED {net}.00
           </AppText>
         </View>
       </Card>
+      <AppText variant="eyebrow" align="center" color={theme.colors.mutedForeground} style={styles.note}>
+        The customer pays you directly. Commission is what you owe MyKeyz — settled in the app later.
+      </AppText>
       <Card style={styles.customer}>
         <View>
           <AppText variant="eyebrow">Customer</AppText>
@@ -89,7 +92,11 @@ const styles = StyleSheet.create({
   },
   summary: {
     gap: 18,
+    marginBottom: 12,
+  },
+  note: {
     marginBottom: 18,
+    paddingHorizontal: 8,
   },
   line: {
     alignItems: "center",

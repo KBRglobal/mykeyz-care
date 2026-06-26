@@ -1,5 +1,4 @@
 import { StyleSheet, View } from "react-native";
-import { Download, TrendingUp } from "lucide-react-native";
 import { AppText } from "@/src/components/ui/AppText";
 import { BackHeader } from "@/src/components/ui/BackHeader";
 import { Card } from "@/src/components/ui/Card";
@@ -11,26 +10,22 @@ export default function EarningsScreen() {
   const { state } = useAppState();
   const earnings = state.earnings;
   const max = Math.max(...earnings.bars, 1);
+  const hasTransactions = earnings.transactions.length > 0;
 
   return (
     <Screen>
       <BackHeader />
       <View style={styles.head}>
         <AppText variant="heading">Earnings</AppText>
-        <View style={styles.export}>
-          <Download color={theme.colors.primary} size={20} />
-        </View>
       </View>
+
       <View style={styles.stats}>
         <Card style={styles.stat}>
           <AppText variant="eyebrow">This week</AppText>
           <AppText variant="title">{earnings.week} AED</AppText>
-          <View style={styles.trend}>
-            <TrendingUp color={theme.colors.success} size={14} />
-            <AppText variant="eyebrow" color={theme.colors.success}>
-              +12%
-            </AppText>
-          </View>
+          <AppText variant="eyebrow" color={theme.colors.mutedForeground}>
+            Paid by customers
+          </AppText>
         </Card>
         <Card style={[styles.stat, styles.month]}>
           <AppText variant="eyebrow" color="#8BA6CC">
@@ -40,49 +35,116 @@ export default function EarningsScreen() {
             {earnings.month} AED
           </AppText>
           <AppText variant="eyebrow" color="#8BA6CC">
-            Payout: 1st July
+            Paid by customers
           </AppText>
         </Card>
       </View>
-      <Card style={styles.chart}>
-        <View style={styles.chartHeader}>
-          <AppText variant="eyebrow">8-week performance</AppText>
-          <AppText variant="eyebrow" color={theme.colors.info}>
-            Total {Math.round(earnings.total / 100) / 10}K AED
+
+      <Card style={styles.totals}>
+        <View style={styles.totalRow}>
+          <View style={styles.totalLabel}>
+            <AppText variant="label">Total gross</AppText>
+            <AppText variant="eyebrow" color={theme.colors.mutedForeground}>
+              Paid to you by customers
+            </AppText>
+          </View>
+          <AppText variant="title" style={styles.totalValue}>
+            AED {earnings.totalGross}
           </AppText>
         </View>
-        <View style={styles.bars}>
-          {earnings.bars.map((value, index) => (
-            <View key={index} style={styles.barWrap}>
-              <View style={styles.barTrack}>
-                <View
-                  style={[
-                    styles.bar,
-                    {
-                      height: `${Math.round((value / max) * 100)}%`,
-                      backgroundColor: index > 4 ? theme.colors.info : index === 3 ? theme.colors.primary : theme.colors.mutedStrong,
-                    },
-                  ]}
-                />
-              </View>
-              <AppText variant="eyebrow" style={styles.week}>
-                W{index + 1}
-              </AppText>
-            </View>
-          ))}
+        <View style={styles.divider} />
+        <View style={styles.totalRow}>
+          <View style={styles.totalLabel}>
+            <AppText variant="label">You keep</AppText>
+            <AppText variant="eyebrow" color={theme.colors.mutedForeground}>
+              Net after MyKeyz commission
+            </AppText>
+          </View>
+          <AppText variant="title" color={theme.colors.success} style={styles.totalValue}>
+            AED {earnings.totalNet}
+          </AppText>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.totalRow}>
+          <View style={styles.totalLabel}>
+            <AppText variant="label">Commission owed to MyKeyz</AppText>
+            <AppText variant="eyebrow" color={theme.colors.mutedForeground}>
+              You owe this — collected in-app later
+            </AppText>
+          </View>
+          <AppText variant="title" color={theme.colors.warning} style={styles.totalValue}>
+            AED {earnings.commissionOwed}
+          </AppText>
         </View>
       </Card>
-      {(earnings.transactions.length ? earnings.transactions : [{ id: "pending", jobName: "No completed payouts yet", netAmount: 0, commission: 0, grossAmount: 0 }]).map((item) => (
-        <Card key={item.id} muted style={styles.payout}>
-          <View>
-            <AppText variant="label">{item.jobName}</AppText>
-            <AppText variant="eyebrow">After 10% commission</AppText>
+
+      <Card style={styles.chart}>
+        <View style={styles.chartHeader}>
+          <AppText variant="eyebrow">Weekly gross</AppText>
+          <AppText variant="eyebrow" color={theme.colors.info}>
+            Total AED {earnings.totalGross}
+          </AppText>
+        </View>
+        {earnings.bars.length ? (
+          <View style={styles.bars}>
+            {earnings.bars.map((value, index) => (
+              <View key={index} style={styles.barWrap}>
+                <View style={styles.barTrack}>
+                  <View
+                    style={[
+                      styles.bar,
+                      {
+                        height: `${Math.round((value / max) * 100)}%`,
+                        backgroundColor: index === earnings.bars.length - 1 ? theme.colors.primary : theme.colors.mutedStrong,
+                      },
+                    ]}
+                  />
+                </View>
+                <AppText variant="eyebrow" style={styles.week}>
+                  W{index + 1}
+                </AppText>
+              </View>
+            ))}
           </View>
-          <AppText variant="label" color={theme.colors.success}>
-            +{item.netAmount} AED
+        ) : (
+          <AppText variant="eyebrow" color={theme.colors.mutedForeground}>
+            No weekly earnings yet
+          </AppText>
+        )}
+      </Card>
+
+      <AppText variant="eyebrow" style={styles.txHeading}>
+        Completed jobs
+      </AppText>
+      {hasTransactions ? (
+        earnings.transactions.map((item) => (
+          <Card key={item.id} muted style={styles.payout}>
+            <View style={styles.payoutMain}>
+              <AppText variant="label">{item.jobName}</AppText>
+              <AppText variant="eyebrow" color={theme.colors.mutedForeground}>
+                Gross AED {item.grossAmount} • Commission AED {item.commission}
+              </AppText>
+            </View>
+            <View style={styles.payoutNet}>
+              <AppText variant="eyebrow" color={theme.colors.mutedForeground}>
+                You keep
+              </AppText>
+              <AppText variant="label" color={theme.colors.success}>
+                AED {item.netAmount}
+              </AppText>
+            </View>
+          </Card>
+        ))
+      ) : (
+        <Card muted style={styles.empty}>
+          <AppText variant="label" align="center">
+            No completed jobs yet
+          </AppText>
+          <AppText variant="eyebrow" align="center" color={theme.colors.mutedForeground}>
+            Win and complete a job to see your earnings here.
           </AppText>
         </Card>
-      ))}
+      )}
     </Screen>
   );
 }
@@ -93,14 +155,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 22,
-  },
-  export: {
-    alignItems: "center",
-    backgroundColor: theme.colors.surface,
-    borderRadius: 16,
-    height: 46,
-    justifyContent: "center",
-    width: 46,
   },
   stats: {
     flexDirection: "row",
@@ -116,10 +170,26 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primary,
   },
-  trend: {
+  totals: {
+    gap: 16,
+    marginBottom: 16,
+  },
+  totalRow: {
     alignItems: "center",
     flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  totalLabel: {
+    flex: 1,
     gap: 4,
+  },
+  totalValue: {
+    fontSize: 20,
+  },
+  divider: {
+    backgroundColor: theme.colors.border,
+    height: 1,
   },
   chart: {
     gap: 18,
@@ -154,10 +224,27 @@ const styles = StyleSheet.create({
   week: {
     fontSize: 7,
   },
+  txHeading: {
+    marginBottom: 10,
+  },
   payout: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: 12,
     marginBottom: 10,
+  },
+  payoutMain: {
+    flex: 1,
+    gap: 4,
+  },
+  payoutNet: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  empty: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 28,
   },
 });

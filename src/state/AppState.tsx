@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from "react";
 import type { LucideIcon } from "lucide-react-native";
-import { activeJobs as initialActiveJobs, conversations as initialConversations, earnings, jobs as initialJobs, provider } from "@/src/data/mock";
+import { activeJobs as initialActiveJobs, conversations as initialConversations, jobs as initialJobs, provider } from "@/src/data/mock";
 import { trackEvent } from "@/src/integrations/analytics";
 import {
   ensureSession,
@@ -33,7 +33,7 @@ import {
   completeOnboarding as apiCompleteOnboarding,
   uploadFile,
   type ApiConversation,
-  type ApiEarnings,
+  type SupplierEarnings,
   type ApiJob,
   type ApiMessage,
   type ApiSupplier,
@@ -113,9 +113,14 @@ export type ChatMessage = {
 };
 
 type EarningsState = {
-  month: number;
+  // this_week / this_month gross the provider was paid by customers.
   week: number;
-  total: number;
+  month: number;
+  // Lifetime ledger-derived totals. `commissionOwed` = money the provider OWES MyKeyz
+  // (collected later via the in-app store); `totalNet` = "you keep". Never a payout.
+  totalGross: number;
+  totalNet: number;
+  commissionOwed: number;
   bars: number[];
   transactions: { id: string; jobName: string; netAmount: number; commission: number; grossAmount: number }[];
 };
@@ -204,12 +209,15 @@ const initialState: AppState = {
   profileGallery: [],
   revealCredits: 0,
   wallet: null,
-  totalEarned: earnings.month,
+  // Ledger-derived; zero until the API hydrates real values. No mock/hardcoded totals.
+  totalEarned: 0,
   earnings: {
-    month: earnings.month,
-    week: earnings.week,
-    total: 18500,
-    bars: earnings.bars,
+    week: 0,
+    month: 0,
+    totalGross: 0,
+    totalNet: 0,
+    commissionOwed: 0,
+    bars: [],
     transactions: [],
   },
   quotesSent: 0,
@@ -312,11 +320,13 @@ function mapApiMessage(message: ApiMessage): ChatMessage {
   };
 }
 
-function mapApiEarnings(data: ApiEarnings): EarningsState {
+function mapApiEarnings(data: SupplierEarnings): EarningsState {
   return {
     week: data.summary.this_week,
     month: data.summary.this_month,
-    total: data.summary.total,
+    totalGross: data.summary.total_gross,
+    totalNet: data.summary.total_net,
+    commissionOwed: data.summary.commission_owed,
     bars: data.weekly_chart.map((item) => item.gross),
     transactions: data.transactions.map((item) => ({
       id: item.job_id,

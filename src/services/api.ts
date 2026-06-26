@@ -135,11 +135,27 @@ export type SendMessageResult =
   | { ok: true; message: ApiMessage; moderation: Moderation }
   | { ok: false; error: string };
 
-export type ApiEarnings = {
-  summary: { this_week: number; this_month: number; total: number };
+/**
+ * Sprint 8 ledger-derived earnings (GET /api/v1/supplier/me/earnings).
+ * BUSINESS MODEL: money flows OUTSIDE the platform — the customer pays the provider
+ * directly (gross). `commission_owed` is the lead commission the PROVIDER OWES MyKeyz
+ * (an amount-owed ledger, collected later via in-app store). The platform never pays
+ * the provider; net = gross - commission = "you keep". No bank/IBAN/payout anywhere.
+ */
+export type SupplierEarnings = {
+  summary: {
+    this_week: number;
+    this_month: number;
+    total_gross: number;
+    total_net: number;
+    commission_owed: number;
+  };
   weekly_chart: { week_start: string; gross: number }[];
   transactions: { job_id: string; job_name: string; completed_at: string; gross_amount: number; commission: number; net_amount: number }[];
 };
+
+/** @deprecated Use {@link SupplierEarnings}. Alias retained for existing imports. */
+export type ApiEarnings = SupplierEarnings;
 
 type AuthSession = { token: string; refresh_token: string; supplier: ApiSupplier };
 
@@ -335,8 +351,9 @@ export async function listSupplierJobs() {
   return request<{ jobs: Array<ApiJob & { quote?: unknown }>; total: number }>("/api/v1/supplier/me/jobs");
 }
 
+/** Ledger-derived supplier earnings. Standard request (throws on hard failure). */
 export async function getEarnings() {
-  return request<ApiEarnings>("/api/v1/supplier/me/earnings");
+  return request<SupplierEarnings>("/api/v1/supplier/me/earnings");
 }
 
 export async function listConversations() {
