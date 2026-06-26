@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { BriefcaseBusiness, CalendarClock, CircleDollarSign } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { OpportunityCard } from "@/src/components/product/OpportunityCard";
+import { VerificationBanner } from "@/src/components/product/VerificationBanner";
 import { AppText } from "@/src/components/ui/AppText";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
@@ -27,6 +28,7 @@ export default function HomeScreen() {
     return (
       <Screen>
         <Header title={t("hello")} onAction={() => router.push("/settings")} />
+        <VerificationBanner />
         <View style={styles.simpleHero}>
           <AppText variant="eyebrow">Simple Mode</AppText>
           <AppText variant="heading">Today</AppText>
@@ -63,6 +65,7 @@ export default function HomeScreen() {
   return (
     <Screen>
       <Header title={t("hello")} onAction={() => router.push("/notifications")} />
+      <VerificationBanner />
       <View style={styles.stats}>
         <View>
           <AppText variant="eyebrow">{t("newLeads")}</AppText>

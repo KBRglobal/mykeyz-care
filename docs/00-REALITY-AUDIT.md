@@ -45,15 +45,15 @@ What is not real enough:
 - `auth/verify-otp` now verifies a hashed, expiring OTP with attempt rate limiting; the fixed codes `123456`/`000000` are gated behind `ALLOW_DEV_OTP` (default off). (Sprint 1)
 - Suppliers now get unique real identities via `supplier_users`; the forced `supplier-demo` writer is gone from the core auth path. (Sprint 1)
 - Sessions and refresh tokens now exist (`sessions` table) with `auth/refresh` and `auth/logout`. (Sprint 1)
-- Supplier onboarding now has a real backend contract: granular endpoints persist trades, service areas, language, business profile, and trade license number, and a `verification_status` state machine moves a supplier `draft -> submitted`. `is_onboarded` is set server-side. Suppliers now support MULTIPLE trades (`supplier_trades`) and MULTIPLE service areas (`supplier_service_areas`) instead of a single `trade` column, and the uploaded trade license is recorded as a `supplier_documents` row. Admin approval (`submitted -> approved/rejected`) is not built yet. (Sprint 2)
+- Supplier onboarding now has a real backend contract: granular endpoints persist trades, service areas, language, business profile, and trade license number, and a `verification_status` state machine moves a supplier `draft -> submitted`. `is_onboarded` is set server-side. Suppliers now support MULTIPLE trades (`supplier_trades`) and MULTIPLE service areas (`supplier_service_areas`) instead of a single `trade` column, and the uploaded trade license is recorded as a `supplier_documents` row. Admin review now closes the loop: an operator approves, rejects, or requests changes from the `/admin` Control Panel (`submitted -> approved/rejected/needs_changes`), with a reason required for non-approval. (Sprint 2 / Sprint 3)
 - Bank/payout details are intentionally NOT collected at onboarding. The provider is paid directly by the customer and pays the platform a commission via Apple/Google IAP (Sprint 9); there is no bank account to capture.
 - Database schema is still created inline in `initializeDatabase`; no migration system exists.
 - Demo seed data is now gated behind `SEED_DEMO_DATA` (default off). (Sprint 1)
 - Earnings endpoint is hardcoded, not ledger-based.
 - Job creation from customer inspections does not exist in this API.
 - Customer selection of winning quote does not exist.
-- Admin endpoints do not exist.
-- Audit logs do not exist.
+- Admin endpoints now exist for the verification slice: `/api/v1/admin` login (rate-limited, constant-time), supplier list/detail, approve/reject/request-changes, and audit-logs, all gated by an admin JWT (`role === 'admin'`); endpoints for jobs, money, and chat admin views do not exist yet (later sprints / Milestone 10). (Sprint 3)
+- Audit logs now exist (`audit_logs`); every verification decision writes one. (Sprint 3)
 - Role boundaries are not complete.
 - Redis is not yet used for OTP, rate limits, queues, or deduplication.
 
@@ -78,12 +78,15 @@ Existing tables:
 - `supplier_trades` (Sprint 2)
 - `supplier_service_areas` (Sprint 2)
 - `supplier_documents` (Sprint 2)
+- `admin_users` (Sprint 3)
+- `verification_reviews` (Sprint 3)
+- `audit_logs` (Sprint 3)
 
 Missing production structures:
 
 - worker accounts (supplier users now exist via `supplier_users`)
 - supplier documents (now exist via `supplier_documents`; trade license is captured here) (Sprint 2)
-- verification reviews (a `verification_status` state machine `draft -> submitted` exists; admin review/approval is Sprint 3)
+- verification reviews (now exist via `verification_reviews`; the `verification_status` state machine extends to `submitted -> approved/rejected/needs_changes` via admin review) (Sprint 3)
 - service categories and service areas (multi-trade + multi-area now exist via `supplier_trades` / `supplier_service_areas`) (Sprint 2)
 - inspection findings
 - job matching records
@@ -98,8 +101,8 @@ Missing production structures:
 - subscription plans
 - supplier subscriptions
 - Apple receipt events
-- admin users
-- audit logs
+- admin users (now exist via `admin_users`) (Sprint 3)
+- audit logs (now exist via `audit_logs`; every verification decision writes one) (Sprint 3)
 - fraud signals
 
 ## Operational Reality
@@ -114,7 +117,7 @@ What exists:
 What is not real enough:
 
 - External TestFlight is waiting for Apple Beta Review.
-- No admin/backoffice exists, so real operations cannot approve providers, resolve jobs, inspect money, or handle disputes.
+- An admin Control Panel now exists, served at `/admin` (secure password login -> admin JWT), with a verification queue: operators approve / reject / request-changes on suppliers (a reason is required for reject and request-changes) without DB edits, every decision writes `verification_reviews` + `audit_logs`, and the supplier app reflects the new status. This is the verification slice only — full backoffice for jobs, money, chat, and dispute resolution is later sprints / Milestone 10. (Sprint 3)
 - No production monitoring contract is documented.
 - No incident or rollback procedure exists beyond the TestFlight runbook.
 - No data backup verification procedure is documented.
