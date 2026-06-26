@@ -22,7 +22,10 @@ export type ApiJob = {
   job_type: "instant" | "tender";
   status: "open" | "assigned" | "in_progress" | "completed" | "expired";
   selected_quote_id: string | null;
-  competitor_amount: number;
+  // Server-authoritative: null until THIS provider holds an authorized reveal for
+  // this exact job, then the real budget; competitor_amount_revealed flags which.
+  competitor_amount: number | null;
+  competitor_amount_revealed: boolean;
   quote_deadline: string | null;
   created_at: string;
   updated_at?: string;
@@ -413,10 +416,84 @@ export async function withdrawQuote(jobId: string, quoteId: string): Promise<Quo
   }
 }
 
-export async function revealPrice(jobId: string) {
-  return request<{ revealed_amount: number; reveals_remaining: number }>(`/api/v1/jobs/${jobId}/reveals`, {
-    method: "POST",
-  });
+// ---- Reveal ledger (Sprint 6, server-authoritative + auditable) ----
+
+export type RevealEventType = "plan_grant" | "reveal_debit" | "purchase";
+
+export type RevealEvent = {
+  id: string;
+  supplier_id: string;
+  job_id: string | null;
+  type: RevealEventType;
+  delta: number;
+  balance_after: number;
+  reason: string;
+  plan: string | null;
+  iap_product_id: string | null;
+  created_at: string;
+};
+
+/** The ONLY source of truth for the reveal balance — never compute it client-side. */
+export type RevealWallet = {
+  reveals_remaining: number;
+  granted_total: number;
+  debited_total: number;
+  purchased_total: number;
+  events: RevealEvent[];
+};
+
+export type RevealResult =
+  | { ok: true; status: number; revealed_amount: number; charged_credits: boolean; reveals_remaining: number; wallet: RevealWallet }
+  | { ok: false; status: number; error: string; iap_product_id: string | null };
+
+/**
+ * Reveals the competitor's budget for a job. Never throws — branch on the result.
+ * 201 -> { revealed_amount, charged_credits, reveals_remaining, wallet }. Re-revealing an
+ * already-revealed job returns charged_credits:false and writes NO new debit. A 402
+ * (`no_credits`) means the wallet is empty — offer the single-reveal placeholder purchase.
+ */
+export async function revealJobBudget(jobId: string): Promise<RevealResult> {
+  try {
+    const result = await request<{
+      revealed_amount: number;
+      charged_credits: boolean;
+      reveals_remaining: number;
+      wallet: RevealWallet;
+    }>(`/api/v1/jobs/${jobId}/reveals`, { method: "POST" });
+    return { ok: true, status: 201, ...result };
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status ?? 0;
+    const message = error instanceof Error ? error.message : "request_failed";
+    // The 402 body carries iap_product_id:'care_reveal_single'; the contract fixes it.
+    return { ok: false, status, error: message, iap_product_id: status === 402 ? "care_reveal_single" : null };
+  }
+}
+
+/** The full reveal wallet (balance + last 50 audit events). Server number only. */
+export async function getReveals() {
+  return request<RevealWallet>("/api/v1/supplier/me/reveals");
+}
+
+export type PurchaseRevealResult =
+  | { ok: true; status: number; wallet: RevealWallet }
+  | { ok: false; status: number; error: string };
+
+/**
+ * PLACEHOLDER single-reveal purchase (Sprint 9 will add real payment/receipt validation).
+ * Never throws. 201 -> RevealWallet (balance +1). 400 `unknown_product` for any other id.
+ */
+export async function purchaseReveal(iapProductId = "care_reveal_single"): Promise<PurchaseRevealResult> {
+  try {
+    const wallet = await request<RevealWallet>("/api/v1/supplier/me/reveals/purchase", {
+      method: "POST",
+      body: JSON.stringify({ iap_product_id: iapProductId }),
+    });
+    return { ok: true, status: 201, wallet };
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status ?? 0;
+    const message = error instanceof Error ? error.message : "request_failed";
+    return { ok: false, status, error: message };
+  }
 }
 
 export async function completeJob(jobId: string) {

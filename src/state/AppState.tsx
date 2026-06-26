@@ -17,7 +17,9 @@ import {
   listJobs,
   listMessages,
   listSupplierJobs,
-  revealPrice as apiRevealPrice,
+  revealJobBudget as apiRevealJobBudget,
+  getReveals as apiGetReveals,
+  purchaseReveal as apiPurchaseReveal,
   sendMessage as apiSendMessage,
   submitQuote,
   editQuote as apiEditQuote,
@@ -35,9 +37,18 @@ import {
   type ApiJob,
   type ApiMessage,
   type ApiSupplier,
+  type RevealWallet,
 } from "@/src/services/api";
 
 const STORAGE_KEY = "mykeyz-care-state-v1";
+
+/** Result of a reveal attempt — the screen branches on this; never throws. */
+export type RevealOutcome =
+  | { ok: true; revealedAmount: number; revealsRemaining: number; chargedCredits: boolean }
+  | { ok: false; needsPurchase: boolean; error: string };
+
+/** Result of the placeholder single-reveal purchase. */
+export type PurchaseOutcome = { ok: true; revealsRemaining: number } | { ok: false; error: string };
 
 export type QuoteStatus = "draft" | "sent" | "won" | "lost";
 
@@ -121,7 +132,10 @@ type AppState = {
   revealedJobIds: string[];
   availability: Record<string, string[]>;
   profileGallery: string[];
+  // Reveal balance is SERVER-authoritative: revealCredits is only ever assigned from
+  // the API (supplier.reveals_remaining or wallet.reveals_remaining), never computed here.
   revealCredits: number;
+  wallet: RevealWallet | null;
   totalEarned: number;
   earnings: EarningsState;
   quotesSent: number;
@@ -148,9 +162,8 @@ type Action =
   | { type: "sendQuote"; jobId: string; amount: number }
   | { type: "revertQuote"; jobId: string }
   | { type: "setQuoteError"; error: string | null }
-  | { type: "revealPrice"; jobId: string }
-  | { type: "setRevealCredits"; amount: number }
-  | { type: "buyCredits"; amount: number }
+  | { type: "setWallet"; wallet: RevealWallet }
+  | { type: "revealSuccess"; jobId: string; wallet: RevealWallet }
   | { type: "completeJob"; jobId?: string }
   | { type: "toggleSimpleMode" }
   | { type: "toggleAvailabilitySlot"; date: string; slot: string }
@@ -179,7 +192,8 @@ const initialState: AppState = {
   revealedJobIds: [],
   availability: {},
   profileGallery: [],
-  revealCredits: 10,
+  revealCredits: 0,
+  wallet: null,
   totalEarned: earnings.month,
   earnings: {
     month: earnings.month,
@@ -244,7 +258,8 @@ function mapApiJob(job: ApiJob, index: number): ProviderJob {
     distance: fallback.distance,
     issue: job.description,
     status: job.status === "open" ? "new" : job.status === "completed" ? "completed" : "active",
-    competitorPrice: job.competitor_amount,
+    // Hidden until this provider reveals it — the server returns null otherwise.
+    competitorPrice: job.competitor_amount ?? undefined,
   };
 }
 
@@ -442,20 +457,17 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case "setQuoteError":
       return { ...state, quoteError: action.error };
-    case "revealPrice":
-      if (state.revealedJobIds.includes(action.jobId)) return state;
-      if (state.revealCredits <= 0) return state;
+    case "setWallet":
+      // Balance comes straight from the server wallet — never recomputed locally.
+      return { ...state, wallet: action.wallet, revealCredits: action.wallet.reveals_remaining };
+    case "revealSuccess":
       return {
         ...state,
-        revealCredits: state.revealCredits - 1,
-        revealedJobIds: [...state.revealedJobIds, action.jobId],
-      };
-    case "setRevealCredits":
-      return { ...state, revealCredits: action.amount };
-    case "buyCredits":
-      return {
-        ...state,
-        revealCredits: state.revealCredits + action.amount,
+        wallet: action.wallet,
+        revealCredits: action.wallet.reveals_remaining,
+        revealedJobIds: state.revealedJobIds.includes(action.jobId)
+          ? state.revealedJobIds
+          : [...state.revealedJobIds, action.jobId],
       };
     case "completeJob": {
       const activeJob = action.jobId
@@ -519,8 +531,9 @@ type AppStateContextValue = {
     quoteId: string,
     patch: { amount?: number; availability?: string; available_date?: string; note?: string },
   ) => Promise<void>;
-  revealPrice: (jobId: string) => boolean;
-  buyCredits: (amount: number) => void;
+  revealJobBudget: (jobId: string) => Promise<RevealOutcome>;
+  purchaseReveal: () => Promise<PurchaseOutcome>;
+  refreshWallet: () => Promise<void>;
   completeJob: (jobId?: string) => void;
   toggleSimpleMode: () => void;
   toggleAvailabilitySlot: (date: string, slot: string) => void;
@@ -548,18 +561,21 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   const loadAll = useCallback(async () => {
-    const [supplier, jobs, supplierJobs, earningsResult, conversationsResult] = await Promise.all([
+    const [supplier, jobs, supplierJobs, earningsResult, conversationsResult, wallet] = await Promise.all([
       getSupplier(),
       listJobs(),
       listSupplierJobs(),
       getEarnings(),
       listConversations(),
+      // The wallet is the source of truth for the reveal balance; tolerate its failure.
+      apiGetReveals().catch(() => null),
     ]);
     dispatch({ type: "setSupplier", supplier });
     dispatch({ type: "setJobs", jobs: jobs.jobs.map(mapApiJob) });
     dispatch({ type: "setActiveJobs", jobs: mapActiveJobs(supplierJobs.jobs) });
     dispatch({ type: "setEarnings", earnings: mapApiEarnings(earningsResult) });
     dispatch({ type: "setConversations", conversations: conversationsResult.conversations.map(mapApiConversation) });
+    if (wallet) dispatch({ type: "setWallet", wallet });
   }, []);
 
   // On boot, restore a persisted session and hydrate from the API. Never auto-logs-in.
@@ -571,20 +587,51 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       .catch(() => undefined);
   }, [loadAll]);
 
-  const revealPrice = useCallback(
-    (jobId: string) => {
-      if (state.revealedJobIds.includes(jobId)) return true;
-      if (state.revealCredits <= 0) return false;
-      dispatch({ type: "revealPrice", jobId });
-      ensureSession()
-        .then(() => apiRevealPrice(jobId))
-        .then((result) => dispatch({ type: "setRevealCredits", amount: result.reveals_remaining }))
-        .catch(() => undefined);
+  // Server-authoritative reveal. The balance shown afterwards comes from the wallet in
+  // the response — never decremented locally. A 402 surfaces needsPurchase for the screen.
+  const revealJobBudget = useCallback(async (jobId: string): Promise<RevealOutcome> => {
+    try {
+      await ensureSession();
+      const result = await apiRevealJobBudget(jobId);
+      if (!result.ok) {
+        return { ok: false, needsPurchase: result.status === 402, error: result.error };
+      }
+      dispatch({ type: "revealSuccess", jobId, wallet: result.wallet });
       trackEvent("price_revealed", { jobId });
-      return true;
-    },
-    [state.phone, state.revealCredits, state.revealedJobIds],
-  );
+      return {
+        ok: true,
+        revealedAmount: result.revealed_amount,
+        revealsRemaining: result.reveals_remaining,
+        chargedCredits: result.charged_credits,
+      };
+    } catch {
+      return { ok: false, needsPurchase: false, error: "request_failed" };
+    }
+  }, []);
+
+  // Placeholder single-reveal purchase (+1). Balance updates from the returned wallet.
+  const purchaseReveal = useCallback(async (): Promise<PurchaseOutcome> => {
+    try {
+      await ensureSession();
+      const result = await apiPurchaseReveal();
+      if (!result.ok) return { ok: false, error: result.error };
+      dispatch({ type: "setWallet", wallet: result.wallet });
+      trackEvent("reveal_purchased", {});
+      return { ok: true, revealsRemaining: result.wallet.reveals_remaining };
+    } catch {
+      return { ok: false, error: "request_failed" };
+    }
+  }, []);
+
+  const refreshWallet = useCallback(async () => {
+    try {
+      await ensureSession();
+      const wallet = await apiGetReveals();
+      dispatch({ type: "setWallet", wallet });
+    } catch {
+      // Keep the last known server balance on failure.
+    }
+  }, []);
 
   const value = useMemo<AppStateContextValue>(
     () => ({
@@ -704,8 +751,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
           dispatch({ type: "setQuoteError", error: "request_failed" });
         }
       },
-      revealPrice,
-      buyCredits: (amount) => dispatch({ type: "buyCredits", amount }),
+      revealJobBudget,
+      purchaseReveal,
+      refreshWallet,
       completeJob: (jobId) => {
         dispatch({ type: "completeJob", jobId });
         if (jobId) {
@@ -773,7 +821,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       },
       resetApp: () => dispatch({ type: "reset" }),
     }),
-    [revealPrice, state, loadAll],
+    [revealJobBudget, purchaseReveal, refreshWallet, state, loadAll],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

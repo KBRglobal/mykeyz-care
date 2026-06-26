@@ -75,6 +75,10 @@ export default function HomeScreen() {
             {(state.totalEarned / 1000).toFixed(1)}K
           </AppText>
         </View>
+        <View>
+          <AppText variant="eyebrow">Reveals</AppText>
+          <AppText variant="heading">{state.revealCredits}</AppText>
+        </View>
       </View>
       <View style={styles.quickRow}>
         <AppText variant="eyebrow" color={theme.colors.info} onPress={() => router.push("/earnings")}>

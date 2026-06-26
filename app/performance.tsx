@@ -10,7 +10,8 @@ import { theme } from "@/src/theme/tokens";
 export default function PerformanceScreen() {
   const { state } = useAppState();
   const active = state.activeJobs.filter((job) => !job.completed).length;
-  const viewed = state.revealedJobIds.length;
+  // Server-authoritative reveal usage; fall back to this session's list before the wallet loads.
+  const viewed = state.wallet ? state.wallet.debited_total : state.revealedJobIds.length;
   const winRate = state.quotesSent ? Math.round((state.completedJobs / state.quotesSent) * 100) : 0;
   const metrics = [
     { label: "Quotes sent", value: state.quotesSent, icon: MessageSquareText, tone: theme.colors.info },

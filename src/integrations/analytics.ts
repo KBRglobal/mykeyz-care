@@ -6,6 +6,7 @@ type AnalyticsEvent =
   | "quote_edited"
   | "quote_edit_blocked"
   | "price_revealed"
+  | "reveal_purchased"
   | "availability_changed"
   | "simple_mode_toggled"
   | "route_optimized"

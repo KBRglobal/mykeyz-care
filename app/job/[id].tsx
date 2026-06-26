@@ -32,9 +32,15 @@ const quoteErrorCopy: Record<string, string> = {
 
 export default function JobDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { state, withdrawMyQuote } = useAppState();
+  const { state, withdrawMyQuote, revealJobBudget, purchaseReveal } = useAppState();
   const job = state.jobs.find((item) => item.id === id);
   const [detail, setDetail] = useState<ApiJobDetail | null>(null);
+  // Reveal state — the amount + remaining balance come from the server only.
+  const [revealedAmount, setRevealedAmount] = useState<number | null>(null);
+  const [revealsLeft, setRevealsLeft] = useState<number | null>(null);
+  const [needsPurchase, setNeedsPurchase] = useState(false);
+  const [revealError, setRevealError] = useState<string | null>(null);
+  const [revealBusy, setRevealBusy] = useState(false);
   const isApproved = state.verificationStatus === "approved";
 
   const refreshDetail = useCallback(() => {
@@ -42,7 +48,13 @@ export default function JobDetailsScreen() {
     let active = true;
     getJobDetail(id)
       .then((result) => {
-        if (active) setDetail(result);
+        if (active) {
+          setDetail(result);
+          // Adopt the server's revealed budget if this provider already holds a reveal.
+          if (result.job.competitor_amount_revealed && result.job.competitor_amount != null) {
+            setRevealedAmount(result.job.competitor_amount);
+          }
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -51,6 +63,39 @@ export default function JobDetailsScreen() {
   }, [id]);
 
   useEffect(() => refreshDetail(), [refreshDetail]);
+
+  const handleReveal = useCallback(async () => {
+    if (!id || revealBusy) return;
+    setRevealBusy(true);
+    setRevealError(null);
+    const result = await revealJobBudget(String(id));
+    if (result.ok) {
+      setRevealedAmount(result.revealedAmount);
+      setRevealsLeft(result.revealsRemaining);
+      setNeedsPurchase(false);
+      refreshDetail();
+    } else if (result.needsPurchase) {
+      setNeedsPurchase(true);
+    } else {
+      setRevealError("Could not reveal the budget. Please try again.");
+    }
+    setRevealBusy(false);
+  }, [id, revealBusy, revealJobBudget, refreshDetail]);
+
+  const handlePurchase = useCallback(async () => {
+    if (revealBusy) return;
+    setRevealBusy(true);
+    setRevealError(null);
+    const purchased = await purchaseReveal();
+    setRevealBusy(false);
+    if (!purchased.ok) {
+      setRevealError("Purchase did not go through. Please try again.");
+      return;
+    }
+    setNeedsPurchase(false);
+    // Spend the just-purchased reveal on this job.
+    await handleReveal();
+  }, [revealBusy, purchaseReveal, handleReveal]);
 
   const apiJob = detail?.job;
   const trade =
@@ -65,6 +110,11 @@ export default function JobDetailsScreen() {
   const findings = detail?.findings ?? [];
   // Default to gating the CTA until the detail call confirms can_quote.
   const canQuote = detail ? detail.can_quote : false;
+
+  // Never show a budget number unless the server says this provider has revealed it.
+  const serverRevealed = apiJob?.competitor_amount_revealed === true && apiJob.competitor_amount != null;
+  const isRevealed = serverRevealed || revealedAmount != null;
+  const displayAmount = revealedAmount ?? (serverRevealed ? apiJob?.competitor_amount ?? null : null);
 
   const myQuote = detail?.my_quote ?? null;
   const badge = myQuote ? quoteBadge[myQuote.status] : null;
@@ -120,6 +170,42 @@ export default function JobDetailsScreen() {
         <AppText color={theme.colors.mutedForeground}>
           Based on recent provider quotes for similar verified homes.
         </AppText>
+      </Card>
+      <Card style={styles.revealCard}>
+        <AppText variant="eyebrow">Competitor budget</AppText>
+        {isRevealed && displayAmount != null ? (
+          <>
+            <AppText variant="heading">AED {displayAmount}</AppText>
+            {revealsLeft != null ? (
+              <AppText color={theme.colors.mutedForeground}>{revealsLeft} reveals left</AppText>
+            ) : (
+              <AppText color={theme.colors.mutedForeground}>{state.revealCredits} reveals left</AppText>
+            )}
+          </>
+        ) : (
+          <>
+            <AppText variant="heading">AED •••</AppText>
+            <AppText color={theme.colors.mutedForeground}>
+              Spend one reveal to see what this customer budgeted for the job.
+            </AppText>
+            {needsPurchase ? (
+              <>
+                <AppText color={theme.colors.destructive}>You are out of reveals.</AppText>
+                <Button
+                  label={revealBusy ? "Working…" : "Buy 1 reveal"}
+                  tone="accent"
+                  onPress={handlePurchase}
+                />
+              </>
+            ) : (
+              <Button
+                label={revealBusy ? "Revealing…" : `Reveal competitor budget • ${state.revealCredits} left`}
+                onPress={handleReveal}
+              />
+            )}
+            {revealError ? <AppText color={theme.colors.destructive}>{revealError}</AppText> : null}
+          </>
+        )}
       </Card>
       {myQuote ? (
         <Card style={styles.quoteCard}>
@@ -206,6 +292,10 @@ const styles = StyleSheet.create({
   },
   estimate: {
     gap: 8,
+    marginBottom: 20,
+  },
+  revealCard: {
+    gap: 10,
     marginBottom: 20,
   },
   quoteCard: {

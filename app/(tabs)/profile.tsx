@@ -47,7 +47,7 @@ export default function ProfileScreen() {
         <View style={styles.planCopy}>
           <AppText variant="title">Premium Highlight</AppText>
           <AppText color={theme.colors.mutedForeground}>
-          {provider.revealsLeft} price reveals included this month.
+          {state.revealCredits} reveals remaining in your wallet.
           </AppText>
         </View>
       </Card>

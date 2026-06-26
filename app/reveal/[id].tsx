@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
+import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { ArrowLeft, LockKeyhole, Trophy } from "lucide-react-native";
 import { AppText } from "@/src/components/ui/AppText";
@@ -10,9 +11,25 @@ import { useAppState } from "@/src/state/AppState";
 
 export default function RevealScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { state, revealPrice } = useAppState();
+  const { state, revealJobBudget } = useAppState();
   const job = state.jobs.find((item) => item.id === id) ?? state.jobs[0];
-  const hasRevealed = state.revealedJobIds.includes(job.id);
+  // Amount and balance are server-authoritative — captured from the reveal response.
+  const [revealedAmount, setRevealedAmount] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const hasRevealed = revealedAmount != null;
+
+  const onReveal = useCallback(async () => {
+    if (!job || hasRevealed || busy) return;
+    setBusy(true);
+    const result = await revealJobBudget(job.id);
+    setBusy(false);
+    if (result.ok) {
+      setRevealedAmount(result.revealedAmount);
+    } else if (result.needsPurchase) {
+      // Out of reveals — send to the placeholder purchase screen.
+      router.push("/credits");
+    }
+  }, [job, hasRevealed, busy, revealJobBudget]);
 
   return (
     <Screen>
@@ -22,29 +39,30 @@ export default function RevealScreen() {
           <LockKeyhole color={theme.colors.accent} size={40} />
         </View>
         <AppText variant="heading" align="center">
-          Reveal Winning Price
+          Reveal Competitor Budget
         </AppText>
         <AppText color={theme.colors.mutedForeground} align="center">
-          Use one reveal credit to see the offer currently above yours.
+          Use one reveal to see what this customer budgeted for the job.
         </AppText>
       </View>
       <Card muted style={styles.priceCard}>
         <Trophy color={theme.colors.accent} fill={theme.colors.accent} size={26} />
         <View style={styles.hiddenPrice}>
-          <AppText variant="eyebrow">{hasRevealed ? "Competitor #1 bid" : "Price hidden"}</AppText>
-          <AppText variant="heading">AED {hasRevealed ? job.competitorPrice : "•••"}</AppText>
+          <AppText variant="eyebrow">{hasRevealed ? "Competitor budget" : "Budget hidden"}</AppText>
+          <AppText variant="heading">AED {hasRevealed ? revealedAmount : "•••"}</AppText>
         </View>
       </Card>
       <Button
-        label={hasRevealed ? "Price already unlocked" : `Reveal for 1 credit • ${state.revealCredits} left`}
-        onPress={() => {
-          if (hasRevealed) return;
-          const ok = revealPrice(job.id);
-          if (!ok) router.push("/credits");
-        }}
+        label={
+          hasRevealed
+            ? `Budget unlocked • ${state.revealCredits} left`
+            : busy
+              ? "Revealing…"
+              : `Reveal for 1 credit • ${state.revealCredits} left`
+        }
+        onPress={onReveal}
       />
       <Button label="Update my quote" tone="secondary" style={styles.secondary} onPress={() => router.back()} />
-      <Button label="No credits state" tone="secondary" style={styles.secondary} onPress={() => router.push("/credits")} />
     </Screen>
   );
 }

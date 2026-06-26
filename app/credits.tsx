@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { BatteryLow, Crown } from "lucide-react-native";
 import { AppText } from "@/src/components/ui/AppText";
@@ -9,7 +10,16 @@ import { theme } from "@/src/theme/tokens";
 import { useAppState } from "@/src/state/AppState";
 
 export default function CreditsScreen() {
-  const { state, buyCredits } = useAppState();
+  const { state, purchaseReveal } = useAppState();
+  const [busy, setBusy] = useState(false);
+
+  const onBuy = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    const result = await purchaseReveal();
+    setBusy(false);
+    if (result.ok) router.back();
+  }, [busy, purchaseReveal]);
 
   return (
     <Screen scroll={false} style={styles.root} contentStyle={styles.content}>
@@ -31,7 +41,7 @@ export default function CreditsScreen() {
               Pro pack
             </AppText>
             <AppText variant="title" color={theme.colors.primaryForeground}>
-              10 Reveals
+              1 Reveal
             </AppText>
           </View>
           <AppText variant="title" color={theme.colors.primaryForeground}>
@@ -53,13 +63,7 @@ export default function CreditsScreen() {
           </AppText>
         </Card>
       </View>
-      <Button
-        label="Buy 10 credits"
-        onPress={() => {
-          buyCredits(10);
-          router.back();
-        }}
-      />
+      <Button label={busy ? "Working…" : "Buy 1 reveal"} onPress={onBuy} />
     </Screen>
   );
 }
