@@ -1,0 +1,142 @@
+# 00 - Reality Audit
+
+This audit separates shipped code from production-ready product behavior. It is the baseline for all MyKeyz Care implementation work.
+
+## Executive Status
+
+MyKeyz Care is a working Expo/React Native beta shell connected to a Railway API and Postgres database. It is not yet a production marketplace. The current system proves navigation, visual direction, basic API connectivity, and a few provider actions, but important workflows still rely on demo data, fixed identities, hardcoded states, or incomplete operational rules.
+
+The product becomes real only when provider identity, verification, job matching, quote competition, reveal credits, WhatsApp communication, earnings, commission, subscriptions, and admin operations are backed by durable backend state and auditable events.
+
+## Mobile App Reality
+
+What exists:
+
+- Expo app with auth, onboarding, tabs, jobs, quotes, inbox, earnings, profile, plans, reveal, availability, route planning, credits, and settings screens.
+- Shared UI primitives: screen, card, button, text, header, progress dots, brand mark.
+- Theme tokens and design language direction.
+- Client API layer connected to `https://care-api.mykeyz.io` with Railway fallback.
+- App state provider that hydrates local state and calls backend endpoints.
+- Basic i18n file, voice price parser, GraphHopper/WhatsApp/speech/analytics integration stubs.
+
+What is not real enough:
+
+- `src/data/mock.ts` still drives trades, jobs, active jobs, conversations, plans, provider defaults, notifications, and earnings references.
+- `AppState.tsx` still merges API responses with mock fallbacks and local-only state.
+- Auth token is kept in memory only in `src/services/api.ts`; app restart does not restore a real session.
+- OTP uses fixed backend codes, not real SMS/WhatsApp.
+- Several actions update local state optimistically without a full backend contract.
+- Visual screens are not yet guaranteed to represent all backend states: pending verification, rejection, quote lost, expired job, no credits, failed upload, no network, payment failed.
+
+## API Reality
+
+What exists:
+
+- Express API with helmet, CORS, JSON parsing, Zod validation on some endpoints.
+- JWT auth middleware.
+- Postgres connection through `pg`.
+- Endpoints for OTP request/verify, supplier profile, jobs, quotes, reveals, supplier jobs, complete job, conversations, messages, earnings, upload presign, WhatsApp webhook.
+- R2 presigned uploads.
+- Railway deployment with Postgres and Redis available.
+
+What is not real enough:
+
+- `auth/verify-otp` accepts fixed codes `123456` and `000000`.
+- `upsertSupplierPhone` always writes the `supplier-demo` ID instead of creating real supplier identities.
+- Database schema is created inline in `initializeDatabase`; no migration system exists.
+- Seed data is always created as part of initialization.
+- Earnings endpoint is hardcoded, not ledger-based.
+- Job creation from customer inspections does not exist in this API.
+- Customer selection of winning quote does not exist.
+- Admin endpoints do not exist.
+- Audit logs do not exist.
+- Role boundaries are not complete.
+- Redis is not yet used for OTP, rate limits, queues, or deduplication.
+
+## Database Reality
+
+Existing tables:
+
+- `suppliers`
+- `jobs`
+- `quotes`
+- `reveals`
+- `conversations`
+- `messages`
+
+Missing production structures:
+
+- supplier users and worker accounts
+- OTP/session/refresh token storage
+- supplier documents
+- verification reviews
+- service categories and service areas
+- inspection findings
+- job matching records
+- quote events
+- reveal credit ledger and reveal events
+- availability slots
+- route plans
+- translated message/job content
+- earnings ledger
+- commission ledger
+- invoices
+- subscription plans
+- supplier subscriptions
+- Apple receipt events
+- admin users
+- audit logs
+- fraud signals
+
+## Operational Reality
+
+What exists:
+
+- Railway API deployment.
+- Cloudflare custom API domain.
+- App Store Connect app and iOS TestFlight build.
+- TestFlight runbook.
+
+What is not real enough:
+
+- External TestFlight is waiting for Apple Beta Review.
+- No admin/backoffice exists, so real operations cannot approve providers, resolve jobs, inspect money, or handle disputes.
+- No production monitoring contract is documented.
+- No incident or rollback procedure exists beyond the TestFlight runbook.
+- No data backup verification procedure is documented.
+
+## Integration Reality
+
+What exists in code or infrastructure:
+
+- API placeholders for WhatsApp webhook.
+- Client integration files for WhatsApp, GraphHopper, speech recognition, and analytics.
+- R2 upload presign endpoint.
+- App Store Connect/TestFlight process.
+
+What is not real enough:
+
+- WhatsApp Cloud API templates, outbound sends, and deep links are not implemented end-to-end.
+- Translation pipeline is not implemented end-to-end.
+- Speech-to-price is local/parser-level, not full multilingual voice input.
+- Text-to-speech help is not implemented as an app-wide interaction model.
+- Apple IAP entitlement sync is not implemented.
+- GraphHopper route optimization is not wired to real work schedules.
+- Fraud/abuse engine is not integrated.
+
+## Product Reality
+
+The current beta demonstrates the intended provider experience, but the product still lacks the backbone required for real suppliers:
+
+- real provider signup
+- real verification
+- real job supply from inspection findings
+- real quote competition
+- real customer choice
+- real reveal billing/credits
+- real WhatsApp workflows
+- real multilingual use
+- real earnings and commission
+- real admin operations
+
+Until these are built, the app should be treated as a connected prototype, not a launch-ready marketplace.
