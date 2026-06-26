@@ -190,6 +190,39 @@ Acceptance:
 
 - Every core funnel can be measured without exposing private content.
 
+## MyKeyz Inspection Bridge (inbound job source)
+
+Purpose:
+
+- Care receives inspection-sourced jobs from MyKeyz (each defect becomes a job).
+- All matched suppliers may quote on an ingested job.
+- Quotes return to MyKeyz so the tenant/customer can compare.
+- The tenant selects the winning quote; selection flows back into Care.
+- Both directions are signed. Full contract: BRIDGE-MYKEYZ-CARE.md.
+
+Required backend capabilities:
+
+- Public inbound routes with own auth: Bearer `CARE_INGEST_KEY` + `X-Care-Signature` HMAC over raw body (not the supplier authRequired router).
+- `POST /api/v1/ingest/jobs` — create job, match suppliers, return `matched_supplier_count`.
+- Idempotency on `external_ref` (= MyKeyz service-lead id): re-ingest returns same job, no duplicate.
+- `GET /api/v1/ingest/jobs/by-ref/:ref` — snapshot (Bearer only).
+- `POST /api/v1/ingest/jobs/by-ref/:ref/select` — select winner as actor_type=customer (audited).
+- Outbound return webhook to `MYKEYZ_CARE_WEBHOOK_URL`, signed with `MYKEYZ_CARE_WEBHOOK_SECRET`, fire-and-forget, on quote.submitted/edited/withdrawn + job.status.
+- Constant-time signature compare; never send customer/supplier phone or any secret; only supplier quote amount crosses (Care → MyKeyz).
+
+Failure fallback:
+
+- `CARE_INGEST_KEY` unset → inbound returns 503 (bridge disabled).
+- `MYKEYZ_CARE_WEBHOOK_URL`/`MYKEYZ_CARE_WEBHOOK_SECRET` unset → outbound is a silent no-op.
+- MyKeyz can poll `GET .../by-ref/:ref` to reconcile a missed return webhook.
+
+Acceptance:
+
+- A painting job in Dubai Marina ingests with `matched_supplier_count >= 1`.
+- Re-ingesting the same `external_ref` returns the same job_id with `idempotent_reuse:true`.
+- A submitted quote reaches MyKeyz; the tenant's selection assigns the job and sets `winning_quote_id`.
+- No phone number or secret ever appears in any bridge payload or log.
+
 ## Fraud / Abuse
 
 Purpose:
