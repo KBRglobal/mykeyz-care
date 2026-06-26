@@ -7,13 +7,20 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { openWhatsAppDraft } from "@/src/integrations/whatsapp";
 import { theme } from "@/src/theme/tokens";
-import type { activeJobs } from "@/src/data/mock";
+import type { ActiveJob, QuoteState } from "@/src/state/AppState";
 
-type ActiveJob = (typeof activeJobs)[number];
+const quoteBadge: Record<QuoteState, { label: string; color: string }> = {
+  pending: { label: "Quote sent", color: theme.colors.info },
+  won: { label: "You won this job", color: theme.colors.success },
+  lost: { label: "Not selected", color: theme.colors.mutedForeground },
+  withdrawn: { label: "Withdrawn", color: theme.colors.mutedForeground },
+};
 
 export function JobCard({ job }: { job: ActiveJob }) {
   const { t } = useTranslation();
   const message = `Hi ${job.customer}, this is your MyKeyz provider. I am confirming ${job.title} in ${job.area} for ${job.when}.`;
+  const badge = job.quoteState ? quoteBadge[job.quoteState] : null;
+  const isWon = job.quoteState === "won";
 
   return (
     <Card style={styles.card}>
@@ -28,9 +35,15 @@ export function JobCard({ job }: { job: ActiveJob }) {
         </View>
         <View style={styles.price}>
           <AppText variant="label">AED {job.price}</AppText>
-          <AppText variant="eyebrow" style={styles.status}>
-            {job.status}
-          </AppText>
+          {badge ? (
+            <AppText variant="eyebrow" color={badge.color}>
+              {badge.label}
+            </AppText>
+          ) : (
+            <AppText variant="eyebrow" style={styles.status}>
+              {job.status}
+            </AppText>
+          )}
         </View>
       </View>
       <View style={styles.time}>
@@ -53,7 +66,9 @@ export function JobCard({ job }: { job: ActiveJob }) {
           onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.area)}`)}
         />
       </View>
-      <Button label="Complete job" tone="accent" onPress={() => router.push(`/job-complete?id=${job.id}`)} />
+      {isWon || !job.quoteState ? (
+        <Button label="Complete job" tone="accent" onPress={() => router.push(`/job-complete?id=${job.id}`)} />
+      ) : null}
     </Card>
   );
 }

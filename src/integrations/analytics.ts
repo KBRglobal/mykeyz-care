@@ -1,6 +1,10 @@
 type AnalyticsEvent =
   | "quote_sent"
   | "quote_blocked"
+  | "quote_withdrawn"
+  | "quote_withdraw_blocked"
+  | "quote_edited"
+  | "quote_edit_blocked"
   | "price_revealed"
   | "availability_changed"
   | "simple_mode_toggled"

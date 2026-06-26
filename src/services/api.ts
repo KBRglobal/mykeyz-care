@@ -20,7 +20,8 @@ export type ApiJob = {
   estimated_value_min: number;
   estimated_value_max: number;
   job_type: "instant" | "tender";
-  status: "open" | "in_progress" | "completed" | "expired";
+  status: "open" | "assigned" | "in_progress" | "completed" | "expired";
+  selected_quote_id: string | null;
   competitor_amount: number;
   quote_deadline: string | null;
   created_at: string;
@@ -28,6 +29,18 @@ export type ApiJob = {
   // Present on the /jobs feed (matched jobs) — optional on the shared shape.
   rank_score?: number;
   has_quoted?: boolean;
+};
+
+export type QuoteStatusApi = "pending" | "shortlisted" | "won" | "lost" | "withdrawn";
+
+export type ApiQuote = {
+  id: string;
+  job_id?: string;
+  amount: number;
+  availability?: string;
+  available_date?: string | null;
+  note?: string;
+  status: QuoteStatusApi;
 };
 
 export type ApiJobFinding = {
@@ -46,7 +59,8 @@ export type ApiJobDetail = {
   findings: ApiJobFinding[];
   inspection_insight: { available: boolean; defects: ApiJobFinding[] };
   quote_count: number;
-  my_quote: unknown | null;
+  my_quote: ApiQuote | null;
+  is_winner: boolean;
   can_quote: boolean;
 };
 
@@ -348,6 +362,50 @@ export async function submitQuote(
       }),
     });
     return { ok: true, status: 201, quote };
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status ?? 0;
+    const message = error instanceof Error ? error.message : "request_failed";
+    return { ok: false, status, error: message };
+  }
+}
+
+export type QuoteMutationResult =
+  | { ok: true; status: number; quote: ApiQuote }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Edits the supplier's own pending quote. Never throws — branch on the result.
+ * 409 `edit_window_closed` when the quote is no longer editable (non-pending,
+ * job closed, or past deadline); 404 `not_found`.
+ */
+export async function editQuote(
+  jobId: string,
+  quoteId: string,
+  patch: { amount?: number; availability?: string; available_date?: string; note?: string },
+): Promise<QuoteMutationResult> {
+  try {
+    const quote = await request<ApiQuote>(`/api/v1/jobs/${jobId}/quotes/${quoteId}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
+    return { ok: true, status: 200, quote };
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status ?? 0;
+    const message = error instanceof Error ? error.message : "request_failed";
+    return { ok: false, status, error: message };
+  }
+}
+
+/**
+ * Withdraws the supplier's own pending quote. Never throws — branch on the result.
+ * 409 `not_withdrawable` when the quote can no longer be withdrawn; 404 `not_found`.
+ */
+export async function withdrawQuote(jobId: string, quoteId: string): Promise<QuoteMutationResult> {
+  try {
+    const quote = await request<ApiQuote>(`/api/v1/jobs/${jobId}/quotes/${quoteId}/withdraw`, {
+      method: "POST",
+    });
+    return { ok: true, status: 200, quote };
   } catch (error) {
     const status = (error as Error & { status?: number }).status ?? 0;
     const message = error instanceof Error ? error.message : "request_failed";

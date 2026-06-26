@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { ArrowLeft, MapPin } from "lucide-react-native";
 import { AppText } from "@/src/components/ui/AppText";
@@ -7,7 +7,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { Screen } from "@/src/components/ui/Screen";
 import { useAppState } from "@/src/state/AppState";
-import { getJobDetail, type ApiJobDetail } from "@/src/services/api";
+import { getJobDetail, type ApiJobDetail, type QuoteStatusApi } from "@/src/services/api";
 import { theme } from "@/src/theme/tokens";
 
 const severityColor: Record<"low" | "medium" | "high", string> = {
@@ -16,15 +16,29 @@ const severityColor: Record<"low" | "medium" | "high", string> = {
   high: theme.colors.destructive,
 };
 
+const quoteBadge: Record<QuoteStatusApi, { label: string; color: string }> = {
+  pending: { label: "Quote sent", color: theme.colors.info },
+  shortlisted: { label: "Shortlisted", color: theme.colors.info },
+  won: { label: "You won this job", color: theme.colors.success },
+  lost: { label: "Not selected", color: theme.colors.mutedForeground },
+  withdrawn: { label: "Withdrawn", color: theme.colors.mutedForeground },
+};
+
+const quoteErrorCopy: Record<string, string> = {
+  edit_window_closed: "This quote can no longer be changed.",
+  not_withdrawable: "This quote can no longer be withdrawn.",
+  request_failed: "Something went wrong. Please try again.",
+};
+
 export default function JobDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { state } = useAppState();
+  const { state, withdrawMyQuote } = useAppState();
   const job = state.jobs.find((item) => item.id === id);
   const [detail, setDetail] = useState<ApiJobDetail | null>(null);
   const isApproved = state.verificationStatus === "approved";
 
-  useEffect(() => {
-    if (!id) return;
+  const refreshDetail = useCallback(() => {
+    if (!id) return undefined;
     let active = true;
     getJobDetail(id)
       .then((result) => {
@@ -35,6 +49,8 @@ export default function JobDetailsScreen() {
       active = false;
     };
   }, [id]);
+
+  useEffect(() => refreshDetail(), [refreshDetail]);
 
   const apiJob = detail?.job;
   const trade =
@@ -49,6 +65,16 @@ export default function JobDetailsScreen() {
   const findings = detail?.findings ?? [];
   // Default to gating the CTA until the detail call confirms can_quote.
   const canQuote = detail ? detail.can_quote : false;
+
+  const myQuote = detail?.my_quote ?? null;
+  const badge = myQuote ? quoteBadge[myQuote.status] : null;
+  const jobIsOpen = apiJob?.status === "open";
+  // The supplier may withdraw/edit ONLY their own pending quote while the job is still open.
+  const canManageQuote = Boolean(myQuote && myQuote.status === "pending" && jobIsOpen);
+  const errorMessage =
+    state.quoteError && (state.quoteError === "edit_window_closed" || state.quoteError === "not_withdrawable")
+      ? quoteErrorCopy[state.quoteError]
+      : null;
 
   return (
     <Screen>
@@ -95,7 +121,38 @@ export default function JobDetailsScreen() {
           Based on recent provider quotes for similar verified homes.
         </AppText>
       </Card>
-      {canQuote ? (
+      {myQuote ? (
+        <Card style={styles.quoteCard}>
+          <View style={styles.quoteHead}>
+            <AppText variant="eyebrow">Your quote</AppText>
+            {badge ? (
+              <AppText variant="label" color={badge.color}>
+                {badge.label}
+              </AppText>
+            ) : null}
+          </View>
+          <AppText variant="heading">AED {myQuote.amount}</AppText>
+          {errorMessage ? (
+            <AppText color={theme.colors.destructive}>{errorMessage}</AppText>
+          ) : null}
+          {canManageQuote ? (
+            <View style={styles.quoteActions}>
+              <Button
+                label="Edit quote"
+                tone="secondary"
+                style={styles.quoteButton}
+                onPress={() => router.push(`/quote/${id}?quoteId=${myQuote.id}`)}
+              />
+              <Button
+                label="Withdraw quote"
+                tone="accent"
+                style={styles.quoteButton}
+                onPress={() => withdrawMyQuote(String(id), myQuote.id).then(refreshDetail)}
+              />
+            </View>
+          ) : null}
+        </Card>
+      ) : canQuote ? (
         <Button label="Send Quote" onPress={() => router.push(`/quote/${id}`)} />
       ) : isApproved ? (
         <Button label="Quoting closed" tone="secondary" />
@@ -150,5 +207,22 @@ const styles = StyleSheet.create({
   estimate: {
     gap: 8,
     marginBottom: 20,
+  },
+  quoteCard: {
+    gap: 10,
+  },
+  quoteHead: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  quoteActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+  },
+  quoteButton: {
+    flex: 1,
   },
 });

@@ -20,6 +20,8 @@ import {
   revealPrice as apiRevealPrice,
   sendMessage as apiSendMessage,
   submitQuote,
+  editQuote as apiEditQuote,
+  withdrawQuote as apiWithdrawQuote,
   updateSupplier as apiUpdateSupplier,
   saveTrades as apiSaveTrades,
   saveServiceAreas as apiSaveServiceAreas,
@@ -62,8 +64,14 @@ export type ProviderJob = {
   competitorPrice?: number;
 };
 
-type ActiveJob = (typeof initialActiveJobs)[number] & {
+export type QuoteState = "pending" | "won" | "lost" | "withdrawn";
+
+export type ActiveJob = (typeof initialActiveJobs)[number] & {
   completed?: boolean;
+  // Sprint 5 quote lifecycle (only present on API-driven supplier jobs).
+  quoteId?: string;
+  quoteState?: QuoteState;
+  jobOpen?: boolean;
 };
 
 export type ConversationItem = {
@@ -290,17 +298,49 @@ function mapApiEarnings(data: ApiEarnings): EarningsState {
   };
 }
 
+function toQuoteState(status: unknown): QuoteState | undefined {
+  switch (status) {
+    case "won":
+    case "lost":
+    case "withdrawn":
+    case "pending":
+      return status;
+    // 'shortlisted' is still in the running — surface it like a live quote.
+    case "shortlisted":
+      return "pending";
+    default:
+      return undefined;
+  }
+}
+
 function mapActiveJobs(jobs: Array<ApiJob & { quote?: any }>): ActiveJob[] {
-  return jobs.map((job) => ({
-    id: job.id,
-    title: job.service_type,
-    customer: "MyKeyz customer",
-    area: job.location_area,
-    price: Number(job.quote?.amount ?? Math.round((job.estimated_value_min + job.estimated_value_max) / 2)),
-    when: job.quote?.availability ?? "Awaiting customer",
-    status: job.status === "completed" ? "Completed" : job.status === "in_progress" ? "Confirmed" : "Quoted",
-    completed: job.status === "completed",
-  }));
+  return jobs.map((job) => {
+    const quoteState = toQuoteState(job.quote?.status);
+    return {
+      id: job.id,
+      title: job.service_type,
+      customer: "MyKeyz customer",
+      area: job.location_area,
+      price: Number(job.quote?.amount ?? Math.round((job.estimated_value_min + job.estimated_value_max) / 2)),
+      when: job.quote?.availability ?? "Awaiting customer",
+      status:
+        quoteState === "won" || job.status === "assigned"
+          ? "Won"
+          : quoteState === "lost"
+            ? "Not selected"
+            : quoteState === "withdrawn"
+              ? "Withdrawn"
+              : job.status === "completed"
+                ? "Completed"
+                : job.status === "in_progress"
+                  ? "Confirmed"
+                  : "Quoted",
+      completed: job.status === "completed",
+      quoteId: job.quote?.id,
+      quoteState,
+      jobOpen: job.status === "open",
+    };
+  });
 }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -473,6 +513,12 @@ type AppStateContextValue = {
   submitVerification: () => Promise<ApiSupplier>;
   completeOnboarding: () => Promise<void>;
   sendQuote: (jobId: string, amount: number) => void;
+  withdrawMyQuote: (jobId: string, quoteId: string) => Promise<void>;
+  editMyQuote: (
+    jobId: string,
+    quoteId: string,
+    patch: { amount?: number; availability?: string; available_date?: string; note?: string },
+  ) => Promise<void>;
   revealPrice: (jobId: string) => boolean;
   buyCredits: (amount: number) => void;
   completeJob: (jobId?: string) => void;
@@ -623,6 +669,40 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
             dispatch({ type: "setQuoteError", error: "request_failed" });
           });
         trackEvent("quote_sent", { jobId, amount });
+      },
+      withdrawMyQuote: async (jobId, quoteId) => {
+        dispatch({ type: "setQuoteError", error: null });
+        try {
+          await ensureSession();
+          const result = await apiWithdrawQuote(jobId, quoteId);
+          if (!result.ok) {
+            // 409 not_withdrawable / 404 not_found — surface for the screen.
+            dispatch({ type: "setQuoteError", error: result.error });
+            trackEvent("quote_withdraw_blocked", { jobId, reason: result.error });
+            return;
+          }
+          await loadAll().catch(() => undefined);
+          trackEvent("quote_withdrawn", { jobId });
+        } catch {
+          dispatch({ type: "setQuoteError", error: "request_failed" });
+        }
+      },
+      editMyQuote: async (jobId, quoteId, patch) => {
+        dispatch({ type: "setQuoteError", error: null });
+        try {
+          await ensureSession();
+          const result = await apiEditQuote(jobId, quoteId, patch);
+          if (!result.ok) {
+            // 409 edit_window_closed / 404 not_found — surface for the screen.
+            dispatch({ type: "setQuoteError", error: result.error });
+            trackEvent("quote_edit_blocked", { jobId, reason: result.error });
+            return;
+          }
+          await loadAll().catch(() => undefined);
+          trackEvent("quote_edited", { jobId });
+        } catch {
+          dispatch({ type: "setQuoteError", error: "request_failed" });
+        }
       },
       revealPrice,
       buyCredits: (amount) => dispatch({ type: "buyCredits", amount }),

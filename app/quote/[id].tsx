@@ -14,10 +14,11 @@ import { useAppState } from "@/src/state/AppState";
 import { theme } from "@/src/theme/tokens";
 
 export default function SubmitQuoteScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { state, sendQuote } = useAppState();
+  const { id, quoteId } = useLocalSearchParams<{ id: string; quoteId?: string }>();
+  const { state, sendQuote, editMyQuote } = useAppState();
   const job = state.jobs.find((item) => item.id === id) ?? state.jobs[0];
   const isApproved = state.verificationStatus === "approved";
+  const isEditing = Boolean(quoteId);
   const insight = job ? getPriceInsight(job) : { low: 0, high: 0, win: 0, recommended: 0, marginAfterFee: 0 };
   const [amount, setAmount] = useState(job ? String(job.quote ?? insight.recommended) : "0");
 
@@ -103,10 +104,14 @@ export default function SubmitQuoteScreen() {
       </Card>
       {isApproved ? (
         <Button
-          label={`Send quote • AED ${amount || "0"}`}
+          label={`${isEditing ? "Update quote" : "Send quote"} • AED ${amount || "0"}`}
           onPress={() => {
-            sendQuote(job.id, Number(amount) || 0);
-            router.replace(`/quote-success?id=${job.id}`);
+            if (isEditing && quoteId) {
+              editMyQuote(job.id, quoteId, { amount: Number(amount) || 0 }).then(() => router.back());
+            } else {
+              sendQuote(job.id, Number(amount) || 0);
+              router.replace(`/quote-success?id=${job.id}`);
+            }
           }}
         />
       ) : (

@@ -100,9 +100,9 @@ Use migrations, not inline schema creation, for production database changes.
 - `estimated_value_min`
 - `estimated_value_max`
 - `job_type`: instant, tender
-- `status`: open, quoting, assigned, active, completion_requested, completed, cancelled, expired
+- `status`: open, assigned, in_progress, completed, expired
 - `quote_deadline`
-- `selected_quote_id`
+- `selected_quote_id` (set when a winning quote is selected; the job then leaves every provider feed)
 - `created_at`
 - `updated_at`
 
@@ -138,19 +138,11 @@ Use migrations, not inline schema creation, for production database changes.
 - `availability`
 - `available_date`
 - `note`
-- `status`: draft, submitted, revised, withdrawn, selected, rejected, expired
+- `status`: pending, shortlisted, won, lost, withdrawn
 - `created_at`
 - `updated_at`
 
-`quote_events`
-
-- `id`
-- `quote_id`
-- `job_id`
-- `supplier_id`
-- `event_type`
-- `payload`
-- `created_at`
+Quote events are NOT a separate table. Every quote transition is recorded in `audit_logs` (actions `quote.submitted`, `quote.edited`, `quote.withdrawn`, `quote.selected`, `quote.rejected`, plus `job.assigned`), readable via `GET /api/v1/admin/audit-logs?entity_id=<quoteId|jobId>`.
 
 ## Reveals
 
@@ -311,15 +303,16 @@ Supplier:
 
 Job:
 
-- `open -> quoting -> assigned -> active -> completion_requested -> completed`
-- `open -> expired`
-- any pre-completion state can move to `cancelled` by admin/system rule
+- `open -> assigned` on admin winner selection (sets `selected_quote_id`, hides `job_matches`)
+- `assigned -> in_progress -> completed`
+- `open -> expired` after deadline
 
 Quote:
 
-- `draft -> submitted`
-- `submitted -> revised`
-- `submitted/revised -> withdrawn`
-- `submitted/revised -> selected`
-- non-selected quotes become `rejected` after customer selection
-- open quotes become `expired` after deadline
+- `pending` is the entry state on submission
+- `pending -> shortlisted` (admin marks a quote as shortlisted during review)
+- `pending -> withdrawn` (supplier withdraws their own pending quote while the job is still open)
+- a supplier may edit their own quote only while it is `pending`, the job is `open`, and the deadline has not passed
+- `pending/shortlisted -> won` on admin winner selection
+- all sibling quotes on the job become `lost` when a winner is selected
+- selection is ADMIN-ONLY (no customer/customer-app step in Care)

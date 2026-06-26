@@ -49,7 +49,7 @@ Response format:
 
 `GET /api/v1/jobs/:id`
 
-- Response: job detail, inspection insight, quote summary, my quote, reveal eligibility.
+- Response: job detail, inspection insight, quote summary, my quote (carrying its own `status`), `is_winner` (= `my_quote.status === 'won'`), reveal eligibility.
 - Required change: do not expose competitor prices unless revealed.
 
 `POST /api/v1/jobs/:id/quotes`
@@ -58,11 +58,12 @@ Response format:
 - Response: `Quote`
 - Required change: enforce verification, deadline, duplicate, status, and quote range rules.
 
-`PUT /api/v1/jobs/:id/quotes/:quoteId`
+`PUT /api/v1/jobs/:id/quotes/:quoteId` (supplier Bearer)
 
-- Request: editable quote fields.
-- Response: `Quote`
-- Required change: allow only before selection/deadline.
+- Request: `{ amount?, availability?, available_date?, note? }`
+- Response: `200` -> updated `Quote`.
+- Errors: `404 not_found`; `409 { error: 'edit_window_closed' }`.
+- Guard: a supplier may edit ONLY their own quote, only while it is `pending`, the job is still `open`, and the quote deadline has not passed.
 
 `POST /api/v1/jobs/:id/reveals`
 
@@ -138,9 +139,11 @@ Response format:
 
 - Replaces or patches availability.
 
-`POST /api/v1/jobs/:id/quotes/:quoteId/withdraw`
+`POST /api/v1/jobs/:id/quotes/:quoteId/withdraw` (supplier Bearer)
 
-- Withdraws a quote before rules lock it.
+- Response: `200` -> `Quote` with `status: 'withdrawn'`.
+- Errors: `404 not_found`; `409 { error: 'not_withdrawable' }`.
+- Guard: a supplier may withdraw ONLY their own `pending` quote while the job is still `open`.
 
 `GET /api/v1/jobs/:id/price-guidance`
 
@@ -176,9 +179,18 @@ All admin endpoints require admin JWT and audit logging.
 
 `GET /api/v1/admin/jobs/:id`
 
+`GET /api/v1/admin/jobs/:id/quotes` (admin Bearer)
+
+- Response: `{ data: (Quote + business_name, full_name, rating)[] }`, ranked by `amount` ascending.
+
 `POST /api/v1/admin/jobs`
 
-`POST /api/v1/admin/jobs/:id/select-quote`
+`POST /api/v1/admin/jobs/:id/select-quote` (admin Bearer)
+
+- Request: `{ quote_id: string }`
+- Response: `{ job, winner, rejected_count }`.
+- Errors: `404 not_found`; `409 { error: 'job_not_open' }`; `409 { error: 'quote_not_selectable' }`.
+- On success: the winner quote becomes `won`, all sibling quotes become `lost`, the job becomes `assigned` with `selected_quote_id` set, and its `job_matches` are hidden so the job leaves every provider feed. Selection is ADMIN-ONLY (no customer app in Care). No payout/bank/IBAN is involved. Each transition writes an `audit_logs` row (`quote.selected`, `quote.rejected`, `job.assigned`).
 
 `GET /api/v1/admin/conversations/:id`
 
@@ -189,6 +201,8 @@ All admin endpoints require admin JWT and audit logging.
 `GET /api/v1/admin/reveal-events`
 
 `GET /api/v1/admin/audit-logs`
+
+- Supports `?entity_id=<quoteId|jobId>` to read a quote's or job's transition history. Quote-lifecycle actions: `quote.submitted`, `quote.edited`, `quote.withdrawn`, `quote.selected`, `quote.rejected`, `job.assigned`.
 
 ## Core Types
 
@@ -221,7 +235,8 @@ Job:
 - `estimated_value_min`
 - `estimated_value_max`
 - `job_type`
-- `status`
+- `status`: `open`, `assigned`, `in_progress`, `completed`, `expired`
+- `selected_quote_id`
 - `quote_deadline`
 
 Quote:
@@ -233,7 +248,7 @@ Quote:
 - `availability`
 - `available_date`
 - `note`
-- `status`
+- `status`: `pending`, `shortlisted`, `won`, `lost`, `withdrawn`
 - `created_at`
 - `updated_at`
 
