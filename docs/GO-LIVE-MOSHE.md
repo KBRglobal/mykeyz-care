@@ -12,6 +12,28 @@ into the two services). Each task says *what*, *where*, the *exact value/command
 
 ---
 
+## ✅ Already done for you (Claude, on Moshe's authorization, 2026-06-27)
+
+Everything safe on the **Care API** service (pre-launch — my service) is **done and verified live**:
+
+- **Phase 1 + Phase 2 + Phase 5 — DONE.** Generated the two bridge secrets + a strong admin password, and
+  set on Care production: `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `CARE_INGEST_KEY`, `MYKEYZ_CARE_WEBHOOK_URL`,
+  `MYKEYZ_CARE_WEBHOOK_SECRET`. The generated values are saved locally at
+  `~/Documents/creds/mykeyz-care-bridge.txt` (gitignored) — that file also lists the **3 values you'll paste
+  into the MyKeyz service in Phase 3**.
+- **Deployed latest `main` to Care prod.** Care was running stale code from 06-26 (before the IAP fix and the
+  phone-less bridge ingest) — redeployed at HEAD (`fcd3aaa`), so real IAP verification + the bridge ingest
+  are now live.
+- **Verified live:** admin login works (wrong pw → 401 `invalid_credentials`, correct pw → token); bridge
+  ingest endpoint live and locked down (correct key → 404, wrong/no key → 401, POST without HMAC → 401);
+  `GET /health` green. IAP is correctly **fail-closed** until you add the store keys in Phase 4.
+
+**What I deliberately did NOT touch** (your gates): the live MyKeyz app's env + deploy (Phases 3 & 7), the
+store keys I don't hold (Phase 4), the OTP/dev-flags that would lock out current testers (Phase 6), and store
+submission (Phase 8). Those are below.
+
+---
+
 ## Where things stand
 
 | Area | Code | What's left for you |
@@ -37,8 +59,8 @@ openssl rand -base64 32   # → this is CARE_INGEST_KEY
 openssl rand -base64 32   # → this is MYKEYZ_CARE_WEBHOOK_SECRET
 ```
 
-- [ ] Generate `CARE_INGEST_KEY` (used to sign MyKeyz → Care job pushes)
-- [ ] Generate `MYKEYZ_CARE_WEBHOOK_SECRET` (used to sign Care → MyKeyz quote-return webhooks)
+- [x] ~~Generate `CARE_INGEST_KEY`~~ (done) (used to sign MyKeyz → Care job pushes)
+- [x] ~~Generate `MYKEYZ_CARE_WEBHOOK_SECRET`~~ (done) (used to sign Care → MyKeyz quote-return webhooks)
 
 Keep them somewhere safe for the next two phases. You'll paste the **same value** into both services.
 
@@ -48,9 +70,9 @@ Keep them somewhere safe for the next two phases. You'll paste the **same value*
 
 Railway → **Care API** service → **Variables** → add:
 
-- [ ] `CARE_INGEST_KEY` = *(the value from Phase 1)*
-- [ ] `MYKEYZ_CARE_WEBHOOK_URL` = `https://api.mykeyz.io/webhooks/care`
-- [ ] `MYKEYZ_CARE_WEBHOOK_SECRET` = *(the value from Phase 1)*
+- [x] ~~`CARE_INGEST_KEY` = *(the value from Phase 1)*~~ (done)
+- [x] ~~`MYKEYZ_CARE_WEBHOOK_URL` = `https://api.mykeyz.io/webhooks/care`~~ (done)
+- [x] ~~`MYKEYZ_CARE_WEBHOOK_SECRET` = *(the value from Phase 1)*~~ (done)
 
 ---
 
@@ -92,9 +114,9 @@ turn on real verification. Railway → **Care API** → **Variables**:
 `/admin` cannot be used until these are set — operators can't approve suppliers, create jobs, or read the
 System health badge without them. Railway → **Care API** → **Variables**:
 
-- [ ] `ADMIN_PASSWORD` = a strong password you generate (`openssl rand -base64 18`) — **do not reuse** a
+- [x] ~~`ADMIN_PASSWORD` = a strong password~~ (done) you generate (`openssl rand -base64 18`) — **do not reuse** a
   password from anywhere else
-- [ ] `ADMIN_EMAIL` = the admin account email
+- [x] ~~`ADMIN_EMAIL` = the admin account email~~ (done)
 
 ---
 
