@@ -18,7 +18,7 @@ main MyKeyz app (port `mykeyz/backend/src/services/sms.ts`); voice = manual-firs
 - [x] verify: `npx tsc --noEmit` green; device run; commit+push per item
 
 ## Run 2 — All Dubai vs Specific Areas
-- [ ] backend: `covers_all_dubai` flag + matching wildcard + e2e; app: 2-option coverage selector
+- [x] backend: `covers_all_dubai` flag + matching wildcard + e2e; app: 2-option coverage selector
 
 ## Run 3 — Real OTP delivery (Unifonic, like main app) + prod gates
 - [ ] port Unifonic SMS from mykeyz/backend/src/services/sms.ts into Care otp-delivery.ts SMS path

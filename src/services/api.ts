@@ -78,6 +78,7 @@ export type ApiSupplier = {
   preferred_language: string;
   trades: string[];
   coverage_areas: string[];
+  covers_all_dubai: boolean;
   rating: number;
   review_count: number;
   plan: string;
@@ -353,10 +354,10 @@ export async function saveTrades(trades: string[]) {
   });
 }
 
-export async function saveServiceAreas(areas: string[]) {
+export async function saveServiceAreas(areas: string[], allDubai = false) {
   return request<ApiSupplier>("/api/v1/supplier/me/service-areas", {
     method: "PUT",
-    body: JSON.stringify({ areas }),
+    body: JSON.stringify({ areas, all_dubai: allDubai }),
   });
 }
 

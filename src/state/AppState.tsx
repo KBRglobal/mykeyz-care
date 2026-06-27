@@ -206,6 +206,7 @@ type AppState = {
   phone: string;
   selectedTradeKeys: string[];
   selectedAreas: string[];
+  coversAllDubai: boolean;
   businessName: string;
   tradeLicenseNumber: string;
   verificationStatus: ApiSupplier["verification_status"];
@@ -240,6 +241,7 @@ type Action =
   | { type: "setSupplier"; supplier: ApiSupplier }
   | { type: "toggleTrade"; tradeKey: string }
   | { type: "toggleArea"; area: string }
+  | { type: "setCoversAllDubai"; value: boolean }
   | { type: "updateBusiness"; businessName: string; tradeLicenseNumber: string }
   | { type: "setLicenseDoc"; url: string }
   | { type: "setJobs"; jobs: ProviderJob[] }
@@ -270,6 +272,7 @@ const initialState: AppState = {
   phone: "",
   selectedTradeKeys: [],
   selectedAreas: [],
+  coversAllDubai: false,
   businessName: "",
   tradeLicenseNumber: "",
   verificationStatus: "draft",
@@ -475,6 +478,7 @@ function reducer(state: AppState, action: Action): AppState {
         supplierId: action.supplier.id,
         phone: action.supplier.phone,
         selectedAreas: action.supplier.coverage_areas,
+        coversAllDubai: action.supplier.covers_all_dubai,
         selectedTradeKeys: action.supplier.trades,
         businessName: action.supplier.business_name,
         tradeLicenseNumber: action.supplier.trade_license_number,
@@ -496,6 +500,8 @@ function reducer(state: AppState, action: Action): AppState {
         : [...state.selectedAreas, action.area];
       return { ...state, selectedAreas: next };
     }
+    case "setCoversAllDubai":
+      return { ...state, coversAllDubai: action.value };
     case "updateBusiness":
       return {
         ...state,
@@ -637,6 +643,7 @@ type AppStateContextValue = {
   logout: () => Promise<void>;
   toggleTrade: (tradeKey: string) => void;
   toggleArea: (area: string) => void;
+  setCoversAllDubai: (value: boolean) => void;
   updateBusiness: (businessName: string, tradeLicenseNumber: string) => void;
   saveTrades: () => Promise<void>;
   saveAreas: () => Promise<void>;
@@ -806,6 +813,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       },
       toggleTrade: (tradeKey) => dispatch({ type: "toggleTrade", tradeKey }),
       toggleArea: (area) => dispatch({ type: "toggleArea", area }),
+      setCoversAllDubai: (value) => dispatch({ type: "setCoversAllDubai", value }),
       updateBusiness: (businessName, tradeLicenseNumber) =>
         dispatch({ type: "updateBusiness", businessName, tradeLicenseNumber }),
       saveTrades: async () => {
@@ -815,7 +823,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       },
       saveAreas: async () => {
         await ensureSession();
-        const supplier = await apiSaveServiceAreas(state.selectedAreas);
+        const supplier = await apiSaveServiceAreas(state.coversAllDubai ? [] : state.selectedAreas, state.coversAllDubai);
         dispatch({ type: "setSupplier", supplier });
       },
       saveBusiness: async (businessName, tradeLicenseNumber) => {
