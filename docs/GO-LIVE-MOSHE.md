@@ -93,19 +93,35 @@ Railway → **MyKeyz API** service → **Variables** → add:
 ## Phase 4 — Activate IAP receipt verification (Care API service)
 
 Without these, the server is **fail-closed in production** (it rejects all purchase receipts). Set them to
-turn on real verification. Railway → **Care API** → **Variables**:
+turn on real verification. Railway → **Care API** → **Variables**.
 
-**Apple**
-- [ ] `APPLE_IAP_BUNDLE_ID` = the app's bundle id (e.g. `com.mykeyz.care`)
-- [ ] `APPLE_IAP_ENVIRONMENT` = `production`
-- [ ] `APPLE_IAP_APP_APPLE_ID` = the app's numeric App Store id *(required by the verifier in production)*
+**I looked these up for you** (via the App Store Connect API + the app config) — the identity values are known:
 
-**Google**
-- [ ] `GOOGLE_PLAY_PACKAGE_NAME` = the Android package name
-- [ ] `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` = the full service-account JSON (androidpublisher-scoped), as one line
+| Var | Value | Source |
+|---|---|---|
+| `APPLE_IAP_BUNDLE_ID` | `com.mykeyz.care` | app config + ASC |
+| `APPLE_IAP_APP_APPLE_ID` | `6784050810` | App Store Connect (the Care app exists) |
+| `GOOGLE_PLAY_PACKAGE_NAME` | `com.mykeyz.care` | app config |
 
-> The Play service account is the same kind you already set up for the main MyKeyz Android payments
-> (Play Console → Setup → API access → service account with Financial/Android Publisher access).
+- [ ] `APPLE_IAP_BUNDLE_ID` = `com.mykeyz.care`
+- [ ] `APPLE_IAP_APP_APPLE_ID` = `6784050810`
+- [ ] `GOOGLE_PLAY_PACKAGE_NAME` = `com.mykeyz.care`
+- [ ] `APPLE_IAP_ENVIRONMENT` = `sandbox` while in TestFlight, then **`production` at public launch**
+  *(important: TestFlight purchases are Sandbox; live App Store purchases are Production — the verifier
+  checks this matches, so flip it to `production` on release day or live purchases will be rejected)*
+- [ ] `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` = the androidpublisher-scoped service-account JSON (one line) —
+  **you still need to provide this** (same kind as the main MyKeyz Android setup; grant it access to the
+  Care app in Play Console)
+
+> ⚠️ **Prerequisite I could not do for you (needs your pricing decision):** the Care app currently has
+> **no in-app purchase products** in App Store Connect or Play Console. Before verification means anything,
+> create the three products in both stores with their prices:
+> `care_plan_standard` (subscription), `care_plan_premium` (subscription), `care_reveal_single` (consumable).
+> I can create them via the ASC API once you give me the prices — I just won't guess pricing.
+
+> Why I didn't just switch IAP on now: TestFlight has no real paid purchases yet, the products don't exist,
+> and setting `sandbox` now would need a silent flip to `production` at launch (easy to forget → broken
+> purchases). It's cleaner to set this whole block in one go at launch. It's **fail-closed** until then.
 
 ---
 
