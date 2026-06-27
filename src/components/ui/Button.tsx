@@ -6,17 +6,20 @@ type ButtonProps = {
   label: string;
   onPress?: () => void;
   tone?: "primary" | "secondary" | "accent";
+  disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
-export function Button({ label, onPress, tone = "primary", style }: ButtonProps) {
+export function Button({ label, onPress, tone = "primary", disabled = false, style }: ButtonProps) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       style={({ pressed }) => [
         styles.base,
         styles[tone],
         pressed ? styles.pressed : null,
+        disabled ? styles.disabled : null,
         style,
       ]}
     >
@@ -66,5 +69,8 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
     transform: [{ scale: 0.98 }],
+  },
+  disabled: {
+    opacity: 0.5,
   },
 });

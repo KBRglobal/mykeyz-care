@@ -9,7 +9,7 @@ export default function SetupLayout() {
       <Stack.Screen name="coverage" />
       <Stack.Screen name="business" />
       <Stack.Screen name="license" />
-      <Stack.Screen name="bank" />
+      <Stack.Screen name="review" />
     </Stack>
   );
 }

@@ -8,7 +8,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { Screen } from "@/src/components/ui/Screen";
 import { SetupProgress } from "@/src/components/product/SetupProgress";
-import { serviceAreas } from "@/src/data/mock";
+import { serviceAreas } from "@/src/data/catalog";
 import { useAppState } from "@/src/state/AppState";
 import { theme } from "@/src/theme/tokens";
 

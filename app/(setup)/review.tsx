@@ -17,7 +17,7 @@ function titleCase(value: string) {
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Not submitted yet",
-  submitted: "Submitted for review",
+  submitted: "Pending review",
   needs_changes: "Changes requested",
   approved: "Verified",
   rejected: "Rejected",

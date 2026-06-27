@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { CheckCircle2, FileUp } from "lucide-react-native";
 import { SetupProgress } from "@/src/components/product/SetupProgress";
 import { AppText } from "@/src/components/ui/AppText";
@@ -9,7 +9,7 @@ import { BackHeader } from "@/src/components/ui/BackHeader";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { Screen } from "@/src/components/ui/Screen";
-import { verificationBenefits } from "@/src/data/mock";
+import { verificationBenefits } from "@/src/data/catalog";
 import { theme } from "@/src/theme/tokens";
 import { useAppState } from "@/src/state/AppState";
 
@@ -24,13 +24,18 @@ export default function LicenseScreen() {
     if (uploading) return;
     setUploadError("");
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        copyToCacheDirectory: true,
       });
       if (result.canceled) return;
+      const file = result.assets[0];
+      if (file.size && file.size > 10 * 1024 * 1024) {
+        setUploadError("File is too large. Please upload a PDF or image under 10MB.");
+        return;
+      }
       setUploading(true);
-      await uploadLicense(result.assets[0].uri, "image/jpeg");
+      await uploadLicense(file.uri, file.mimeType ?? "application/pdf");
     } catch {
       setUploadError("Could not upload your license. Please check your connection and try again.");
     } finally {
@@ -44,7 +49,7 @@ export default function LicenseScreen() {
     setSubmitting(true);
     try {
       await submitVerification();
-      router.push("/(setup)/bank");
+      router.push("/(setup)/review");
     } catch (err) {
       if (err instanceof Error && err.message === "incomplete_profile") {
         setSubmitError("Add your trades, areas, business details and license first.");
@@ -114,11 +119,11 @@ export default function LicenseScreen() {
       </Card>
       {submitError ? <AppText color={theme.colors.destructive} style={styles.error}>{submitError}</AppText> : null}
       <Button
-        label={submitting ? "Submitting..." : "Submit for review"}
+        label={submitting ? "Submitting..." : uploaded ? "Submit for review" : "Upload your license to continue"}
         onPress={onSubmit}
+        disabled={!uploaded || submitting}
         style={styles.cta}
       />
-      <Button label="Skip for now" tone="secondary" onPress={() => router.push("/(setup)/bank")} style={styles.skip} />
     </Screen>
   );
 }
