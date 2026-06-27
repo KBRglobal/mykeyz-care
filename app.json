@@ -9,11 +9,8 @@
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.mykeyz.care",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "supportsTablet": true,
-      "associatedDomains": [
-        "applinks:care.mykeyz.io"
-      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "MyKeyz Care lets providers add real job photos to their profile.",
@@ -24,7 +21,7 @@
     },
     "android": {
       "package": "com.mykeyz.care",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -34,23 +31,6 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.RECORD_AUDIO"
-      ],
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "care.mykeyz.io",
-              "pathPrefix": "/job"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
       ]
     },
     "web": {
