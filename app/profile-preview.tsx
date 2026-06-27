@@ -95,7 +95,9 @@ export default function ProfilePreviewScreen() {
           </View>
         </View>
         <AppText color={theme.colors.mutedForeground}>
-          "Ahmed is professional, fast and clean. I would hire him again."
+          {state.provider.rating > 0
+            ? `Rated ${state.provider.rating} by customers you've worked with.`
+            : "No reviews yet — your first completed jobs will build your rating."}
         </AppText>
       </Card>
       <Button label="Upgrade to elite now" style={styles.cta} />
