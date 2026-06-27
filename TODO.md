@@ -8,8 +8,8 @@ main MyKeyz app (port `mykeyz/backend/src/services/sms.ts`); voice = manual-firs
 
 - [x] phone.tsx — add OS autofill (`autoComplete="tel"`, `textContentType="telephoneNumber"`); keep empty default
 - [x] otp.tsx — remove mock display fallback `"+971 50 123 4567"`; add SMS OTP autofill (`textContentType="oneTimeCode"`, `autoComplete="sms-otp"`) + multi-digit paste/distribute
-- [ ] AppState.tsx — stop seeding mock `jobs`/`activeJobs`/`conversations`/`provider`; initialize empty + load real data
-- [ ] mock.ts — delete the fake-data exports (jobs, activeJobs, conversations, provider, notifications, earnings); keep static catalogs (trades, serviceAreas→Run 2, setupSteps, verificationBenefits) and rename file to `catalog.ts`
+- [x] AppState.tsx — stop seeding mock `jobs`/`activeJobs`/`conversations`/`provider`; initialize empty + load real data
+- [x] mock.ts — delete the fake-data exports (jobs, activeJobs, conversations, provider, notifications, earnings); keep static catalogs (trades, serviceAreas→Run 2, setupSteps, verificationBenefits) and rename file to `catalog.ts`
 - [ ] (tabs)/index.tsx (home) — wire real supplier name, verification status, new-leads count, matched leads, notifications, availability; "earned thanks to MyKeyz" from earnings ledger; remove fake fallbacks + empty states
 - [ ] earnings.tsx + notifications.tsx + quotes.tsx + jobs.tsx + inbox.tsx — replace any mock fallback with real endpoints + empty states
 - [ ] license.tsx — PDF support via expo-document-picker (PDF + image, correct content-type); remove "Skip for now"; surface "Pending Review" after submit

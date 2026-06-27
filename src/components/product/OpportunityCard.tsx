@@ -4,9 +4,9 @@ import { AppText } from "@/src/components/ui/AppText";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { theme } from "@/src/theme/tokens";
-import type { jobs } from "@/src/data/mock";
+import type { ProviderJob } from "@/src/state/AppState";
 
-type Job = (typeof jobs)[number];
+type Job = ProviderJob;
 
 export function OpportunityCard({ job, onPress }: { job: Job; onPress?: () => void }) {
   const Icon = job.icon;

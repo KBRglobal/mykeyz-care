@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from "react";
-import type { LucideIcon } from "lucide-react-native";
-import { activeJobs as initialActiveJobs, conversations as initialConversations, jobs as initialJobs, provider } from "@/src/data/mock";
+import { Home, type LucideIcon } from "lucide-react-native";
+import { trades } from "@/src/data/catalog";
 import { identify, reset as resetAnalytics, trackEvent } from "@/src/integrations/analytics";
 import {
   ensureSession,
@@ -43,6 +43,25 @@ import {
 } from "@/src/services/api";
 
 const STORAGE_KEY = "mykeyz-care-state-v1";
+
+// Neutral provider defaults — NO mock identity. Real values come from getSupplier() after login;
+// until then the dashboard renders empty/skeleton states, never a fake name.
+export const defaultProvider = {
+  name: "",
+  plan: "",
+  rating: 0,
+  jobsWon: 0,
+  winRate: "",
+  revealsLeft: 0,
+  services: [] as string[],
+  icon: Home as LucideIcon,
+};
+
+// Map a job's trade_category to an icon from the real trade catalog (no mock-job dependency).
+const TRADE_ICONS: Record<string, LucideIcon> = Object.fromEntries(trades.map((t) => [t.key, t.icon]));
+function iconForTrade(tradeCategory: string): LucideIcon {
+  return TRADE_ICONS[tradeCategory] ?? Home;
+}
 
 /** Result of a reveal attempt — the screen branches on this; never throws. */
 export type RevealOutcome =
@@ -120,7 +139,17 @@ export type ProviderJob = {
 
 export type QuoteState = "pending" | "won" | "lost" | "withdrawn";
 
-export type ActiveJob = (typeof initialActiveJobs)[number] & {
+export type ActiveJobBase = {
+  id: string;
+  title: string;
+  customer: string;
+  area: string;
+  price: number;
+  when: string;
+  status: string;
+};
+
+export type ActiveJob = ActiveJobBase & {
   completed?: boolean;
   // Sprint 5 quote lifecycle (only present on API-driven supplier jobs).
   quoteId?: string;
@@ -172,7 +201,7 @@ type AppState = {
   setupComplete: boolean;
   language: string;
   simpleMode: boolean;
-  provider: typeof provider;
+  provider: typeof defaultProvider;
   supplierId: string;
   phone: string;
   selectedTradeKeys: string[];
@@ -236,7 +265,7 @@ const initialState: AppState = {
   setupComplete: false,
   language: "en",
   simpleMode: false,
-  provider,
+  provider: defaultProvider,
   supplierId: "",
   phone: "",
   selectedTradeKeys: [],
@@ -247,8 +276,8 @@ const initialState: AppState = {
   licenseDocUrl: null,
   // The feed is API-driven (matched jobs only) — never seed it from mock data.
   jobs: [],
-  activeJobs: initialActiveJobs,
-  conversations: initialConversations,
+  activeJobs: [],
+  conversations: [],
   messages: {},
   sentQuotes: [],
   revealedJobIds: [],
@@ -277,15 +306,15 @@ function restoreState(stored: Partial<AppState>): AppState {
   // Jobs are API-driven now; persisted jobs lose their (function) icon on
   // serialize, so re-attach a fallback icon by position. listJobs() refreshes
   // them on boot.
-  const restoredJobs = (stored.jobs ?? []).map((job, index) => ({
+  const restoredJobs = (stored.jobs ?? []).map((job) => ({
     ...job,
-    icon: initialJobs[index % initialJobs.length].icon,
+    icon: iconForTrade(job.trade.toLowerCase()),
   }));
 
   return {
     ...initialState,
     ...stored,
-    provider: { ...provider, ...stored.provider, icon: provider.icon },
+    provider: { ...defaultProvider, ...stored.provider, icon: defaultProvider.icon },
     jobs: restoredJobs,
     activeJobs: stored.activeJobs ?? initialState.activeJobs,
     conversations: stored.conversations ?? initialState.conversations,
@@ -311,17 +340,16 @@ function serializeState(state: AppState) {
   };
 }
 
-function mapApiJob(job: ApiJob, index: number): ProviderJob {
-  const fallback = initialJobs[index % initialJobs.length];
+function mapApiJob(job: ApiJob): ProviderJob {
   return {
     id: job.id,
     title: job.service_type,
     trade: job.trade_category.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
-    icon: fallback.icon,
+    icon: iconForTrade(job.trade_category),
     area: job.location_area,
     home: job.location_address,
     estimate: Math.round((job.estimated_value_min + job.estimated_value_max) / 2),
-    distance: fallback.distance,
+    distance: "",
     issue: job.description,
     status: job.status === "open" ? "new" : job.status === "completed" ? "completed" : "active",
     // Hidden until this provider reveals it — the server returns null otherwise.
@@ -329,7 +357,7 @@ function mapApiJob(job: ApiJob, index: number): ProviderJob {
   };
 }
 
-function mapSupplier(supplier: ApiSupplier, currentProvider: typeof provider) {
+function mapSupplier(supplier: ApiSupplier, currentProvider: typeof defaultProvider) {
   return {
     ...currentProvider,
     name: supplier.full_name,
@@ -337,7 +365,7 @@ function mapSupplier(supplier: ApiSupplier, currentProvider: typeof provider) {
     rating: supplier.rating,
     revealsLeft: supplier.reveals_remaining,
     services: supplier.trades,
-    icon: provider.icon,
+    icon: defaultProvider.icon,
   };
 }
 
