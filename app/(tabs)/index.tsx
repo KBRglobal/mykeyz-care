@@ -21,11 +21,13 @@ export default function HomeScreen() {
   const isApproved = state.verificationStatus === "approved";
   const activeCount = state.activeJobs.filter((job) => !job.completed).length;
   const availabilityCount = Object.values(state.availability).reduce((sum, slots) => sum + slots.length, 0);
+  // Greet by the supplier's real name once loaded; neutral until then (never a mock name).
+  const greeting = state.provider.name ? t("hello", { name: state.provider.name }) : t("helloGuest");
 
   if (state.simpleMode) {
     return (
       <Screen>
-        <Header title={t("hello")} onAction={() => router.push("/settings")} />
+        <Header title={greeting} onAction={() => router.push("/settings")} />
         <VerificationBanner />
         <View style={styles.simpleHero}>
           <AppText variant="eyebrow">Simple Mode</AppText>
@@ -44,7 +46,7 @@ export default function HomeScreen() {
           <Card style={styles.simpleTile}>
             <CircleDollarSign color={theme.colors.accent} size={32} />
             <AppText variant="heading">{Math.round(state.totalEarned)}</AppText>
-            <AppText variant="label">AED earned</AppText>
+            <AppText variant="label">Earned via MyKeyz</AppText>
             <Button label="Earnings" tone="secondary" onPress={() => router.push("/earnings")} />
           </Card>
           <Card style={styles.simpleTileWide}>
@@ -62,7 +64,7 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      <Header title={t("hello")} onAction={() => router.push("/notifications")} />
+      <Header title={greeting} onAction={() => router.push("/notifications")} />
       <VerificationBanner />
       <View style={styles.stats}>
         <View>

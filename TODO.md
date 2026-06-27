@@ -10,7 +10,7 @@ main MyKeyz app (port `mykeyz/backend/src/services/sms.ts`); voice = manual-firs
 - [x] otp.tsx — remove mock display fallback `"+971 50 123 4567"`; add SMS OTP autofill (`textContentType="oneTimeCode"`, `autoComplete="sms-otp"`) + multi-digit paste/distribute
 - [x] AppState.tsx — stop seeding mock `jobs`/`activeJobs`/`conversations`/`provider`; initialize empty + load real data
 - [x] mock.ts — delete the fake-data exports (jobs, activeJobs, conversations, provider, notifications, earnings); keep static catalogs (trades, serviceAreas→Run 2, setupSteps, verificationBenefits) and rename file to `catalog.ts`
-- [ ] (tabs)/index.tsx (home) — wire real supplier name, verification status, new-leads count, matched leads, notifications, availability; "earned thanks to MyKeyz" from earnings ledger; remove fake fallbacks + empty states
+- [x] (tabs)/index.tsx (home) — wire real supplier name, verification status, new-leads count, matched leads, notifications, availability; "earned thanks to MyKeyz" from earnings ledger; remove fake fallbacks + empty states
 - [ ] earnings.tsx + notifications.tsx + quotes.tsx + jobs.tsx + inbox.tsx — replace any mock fallback with real endpoints + empty states
 - [x] license.tsx — PDF support via expo-document-picker (PDF + image, correct content-type); remove "Skip for now"; surface "Pending Review" after submit
 - [x] bank.tsx → rename to review.tsx; update routes that push to `/bank`; scrub "Bank" from stepper/labels
