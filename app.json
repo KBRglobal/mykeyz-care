@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.mykeyz.care",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "supportsTablet": true,
       "associatedDomains": [
         "applinks:care.mykeyz.io"
@@ -24,7 +24,7 @@
     },
     "android": {
       "package": "com.mykeyz.care",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
