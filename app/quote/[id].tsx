@@ -21,6 +21,8 @@ export default function SubmitQuoteScreen() {
   const isEditing = Boolean(quoteId);
   const insight = job ? getPriceInsight(job) : { low: 0, high: 0, win: 0, recommended: 0, marginAfterFee: 0 };
   const [amount, setAmount] = useState(job ? String(job.quote ?? insight.recommended) : "0");
+  const [availability, setAvailability] = useState("");
+  const [note, setNote] = useState("");
 
   if (!job) {
     return (
@@ -51,29 +53,22 @@ export default function SubmitQuoteScreen() {
         </View>
         <AppText color={theme.colors.mutedForeground}>{job.issue}</AppText>
       </Card>
-      <Card style={styles.voice}>
-        <View style={styles.mic}>
-          <Mic color={theme.colors.primaryForeground} size={42} />
-        </View>
-        <AppText variant="label" align="center">
-          Voice quote ready for native build
-        </AppText>
-        <AppText color={theme.colors.mutedForeground} align="center">
-          Expo Go supports the spoken help. Live speech input will use a dev client build.
-        </AppText>
-        <Button
-          label="Dictate price"
-          tone="secondary"
-          onPress={async () => {
-            await startPriceRecognition((transcript) => {
-              const parsed = parsePriceFromSpeech(transcript);
-              if (parsed) setAmount(String(parsed));
-            });
-          }}
-        />
-      </Card>
       <Card muted style={styles.inputCard}>
-        <AppText variant="eyebrow">Final price</AppText>
+        <View style={styles.priceLabelRow}>
+          <AppText variant="eyebrow">Final price</AppText>
+          <Pressable
+            style={styles.dictate}
+            onPress={async () => {
+              await startPriceRecognition((transcript) => {
+                const parsed = parsePriceFromSpeech(transcript);
+                if (parsed) setAmount(String(parsed));
+              });
+            }}
+          >
+            <Mic color={theme.colors.accent} size={15} />
+            <AppText variant="eyebrow" color={theme.colors.accent}>Dictate (optional)</AppText>
+          </Pressable>
+        </View>
         <View style={styles.inputRow}>
           <AppText variant="title">AED</AppText>
           <TextInput
@@ -84,6 +79,29 @@ export default function SubmitQuoteScreen() {
             placeholderTextColor={theme.colors.mutedForeground}
           />
         </View>
+      </Card>
+      <Card muted style={styles.fieldCard}>
+        <AppText variant="eyebrow">Availability</AppText>
+        <TextInput
+          value={availability}
+          onChangeText={setAvailability}
+          placeholder="e.g. Tomorrow morning, or within 2 days"
+          placeholderTextColor={theme.colors.mutedForeground}
+          style={styles.fieldInput}
+        />
+      </Card>
+      <Card muted style={styles.fieldCard}>
+        <AppText variant="eyebrow">Message &amp; work details</AppText>
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          placeholder="What's included, your approach, anything the customer should know"
+          placeholderTextColor={theme.colors.mutedForeground}
+          multiline
+          numberOfLines={3}
+          maxLength={140}
+          style={[styles.fieldInput, styles.fieldMultiline]}
+        />
       </Card>
       <Card muted style={styles.hint}>
         <View style={styles.hintTop}>
@@ -106,10 +124,14 @@ export default function SubmitQuoteScreen() {
         <Button
           label={`${isEditing ? "Update quote" : "Send quote"} • AED ${amount || "0"}`}
           onPress={() => {
+            const extra = {
+              ...(availability.trim() ? { availability: availability.trim() } : {}),
+              ...(note.trim() ? { note: note.trim() } : {}),
+            };
             if (isEditing && quoteId) {
-              editMyQuote(job.id, quoteId, { amount: Number(amount) || 0 }).then(() => router.back());
+              editMyQuote(job.id, quoteId, { amount: Number(amount) || 0, ...extra }).then(() => router.back());
             } else {
-              sendQuote(job.id, Number(amount) || 0);
+              sendQuote(job.id, Number(amount) || 0, extra);
               router.replace(`/quote-success?id=${job.id}`);
             }
           }}
@@ -140,22 +162,32 @@ const styles = StyleSheet.create({
   jobMeta: {
     gap: 4,
   },
-  voice: {
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 16,
-  },
-  mic: {
-    alignItems: "center",
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.full,
-    height: 120,
-    justifyContent: "center",
-    width: 120,
-  },
   inputCard: {
     gap: 8,
     marginBottom: 16,
+  },
+  priceLabelRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  dictate: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  fieldCard: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  fieldInput: {
+    color: theme.colors.foreground,
+    fontFamily: theme.fonts.sans,
+    fontSize: 16,
+  },
+  fieldMultiline: {
+    minHeight: 72,
+    textAlignVertical: "top",
   },
   inputRow: {
     alignItems: "center",

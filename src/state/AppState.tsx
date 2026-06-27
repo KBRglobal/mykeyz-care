@@ -644,7 +644,7 @@ type AppStateContextValue = {
   uploadLicense: (uri: string, contentType?: string) => Promise<void>;
   submitVerification: () => Promise<ApiSupplier>;
   completeOnboarding: () => Promise<void>;
-  sendQuote: (jobId: string, amount: number) => void;
+  sendQuote: (jobId: string, amount: number, extra?: { availability?: string; note?: string }) => void;
   withdrawMyQuote: (jobId: string, quoteId: string) => Promise<void>;
   editMyQuote: (
     jobId: string,
@@ -847,7 +847,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: "completeSetup" });
         trackEvent("onboarding_completed", {});
       },
-      sendQuote: (jobId, amount) => {
+      sendQuote: (jobId, amount, extra) => {
         // Gate: unapproved suppliers can never quote — surface a flag, skip the API.
         if (state.verificationStatus !== "approved") {
           dispatch({ type: "setQuoteError", error: "not_verified" });
@@ -856,7 +856,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         }
         dispatch({ type: "sendQuote", jobId, amount });
         ensureSession()
-          .then(() => submitQuote(jobId, amount))
+          .then(() => submitQuote(jobId, amount, extra))
           .then((result) => {
             if (!result.ok) {
               // 403 (not_verified / not_matched) → roll back the optimistic quote.

@@ -14,7 +14,7 @@ main MyKeyz app (port `mykeyz/backend/src/services/sms.ts`); voice = manual-firs
 - [ ] earnings.tsx + notifications.tsx + quotes.tsx + jobs.tsx + inbox.tsx — replace any mock fallback with real endpoints + empty states
 - [x] license.tsx — PDF support via expo-document-picker (PDF + image, correct content-type); remove "Skip for now"; surface "Pending Review" after submit
 - [x] bank.tsx → rename to review.tsx; update routes that push to `/bank`; scrub "Bank" from stepper/labels
-- [ ] quote/[id].tsx — surface manual fields (price, message, work details, availability/available_date); voice optional
+- [x] quote/[id].tsx — surface manual fields (price, message, work details, availability/available_date); voice optional
 - [ ] verify: `npx tsc --noEmit` green; device run; commit+push per item
 
 ## Run 2 — All Dubai vs Specific Areas
