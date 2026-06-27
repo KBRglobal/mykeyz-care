@@ -71,7 +71,8 @@ export type VerificationStatus = "draft" | "submitted" | "needs_changes" | "appr
 
 export type ApiSupplier = {
   id: string;
-  phone: string;
+  phone: string | null;
+  email: string | null;
   full_name: string;
   business_name: string;
   trade_license_number: string;
@@ -272,18 +273,20 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ---- Auth ----
 
-export async function requestOtp(phone: string, channel: "sms" | "whatsapp" = "sms") {
+// Care's temporary login channel is email (codes delivered via Resend). Phone delivery comes later;
+// the backend still accepts a `phone` identifier, so reinstating phone here is a one-line change.
+export async function requestOtp(email: string) {
   return rawRequest<{ expires_in: number; dev_code?: string }>(
     "/api/v1/auth/request-otp",
-    { method: "POST", body: JSON.stringify({ phone, channel }) },
+    { method: "POST", body: JSON.stringify({ email, channel: "email" }) },
     false,
   );
 }
 
-export async function verifyOtp(phone: string, code: string) {
+export async function verifyOtp(email: string, code: string) {
   const result = await rawRequest<AuthSession>(
     "/api/v1/auth/verify-otp",
-    { method: "POST", body: JSON.stringify({ phone, code }) },
+    { method: "POST", body: JSON.stringify({ email, code }) },
     false,
   );
   await applySession(result);

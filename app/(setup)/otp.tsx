@@ -62,7 +62,7 @@ export default function OtpScreen() {
     setError("");
     setVerifying(true);
     try {
-      await signIn(state.phone, code);
+      await signIn(state.email, code);
       router.replace("/(setup)/trade");
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "invalid_otp";
@@ -81,7 +81,7 @@ export default function OtpScreen() {
         <View>
           <AppText variant="heading">Verification</AppText>
           <AppText color={theme.colors.mutedForeground}>
-            We sent a 6-digit code to {state.phone}.
+            We sent a 6-digit code to {state.email}.
           </AppText>
         </View>
         <View style={styles.otp}>
@@ -96,7 +96,7 @@ export default function OtpScreen() {
               onKeyPress={({ nativeEvent }) => handleKeyPress(index, nativeEvent.key)}
               keyboardType="number-pad"
               textContentType="oneTimeCode"
-              autoComplete="sms-otp"
+              autoComplete="one-time-code"
               importantForAutofill="yes"
               maxLength={index === 0 ? 6 : 1}
               style={[styles.otpCell, { width: cellSize }, value ? styles.filled : null]}

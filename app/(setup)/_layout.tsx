@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 export default function SetupLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="email" />
       <Stack.Screen name="phone" />
       <Stack.Screen name="otp" />
       <Stack.Screen name="trade" />

@@ -28,7 +28,7 @@ export default function WelcomeScreen() {
 
   const next = () => {
     if (index === slides.length - 1) {
-      router.push("/(setup)/phone");
+      router.push("/(setup)/email");
       return;
     }
     setIndex((current) => current + 1);

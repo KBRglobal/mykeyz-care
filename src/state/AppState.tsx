@@ -204,6 +204,7 @@ type AppState = {
   provider: typeof defaultProvider;
   supplierId: string;
   phone: string;
+  email: string;
   selectedTradeKeys: string[];
   selectedAreas: string[];
   coversAllDubai: boolean;
@@ -238,6 +239,7 @@ type Action =
   | { type: "completeSetup" }
   | { type: "setLanguage"; language: string }
   | { type: "setPhone"; phone: string }
+  | { type: "setEmail"; email: string }
   | { type: "setSupplier"; supplier: ApiSupplier }
   | { type: "toggleTrade"; tradeKey: string }
   | { type: "toggleArea"; area: string }
@@ -270,6 +272,7 @@ const initialState: AppState = {
   provider: defaultProvider,
   supplierId: "",
   phone: "",
+  email: "",
   selectedTradeKeys: [],
   selectedAreas: [],
   coversAllDubai: false,
@@ -472,11 +475,14 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, language: action.language };
     case "setPhone":
       return { ...state, phone: action.phone };
+    case "setEmail":
+      return { ...state, email: action.email };
     case "setSupplier":
       return {
         ...state,
         supplierId: action.supplier.id,
-        phone: action.supplier.phone,
+        phone: action.supplier.phone ?? "",
+        email: action.supplier.email ?? "",
         selectedAreas: action.supplier.coverage_areas,
         coversAllDubai: action.supplier.covers_all_dubai,
         selectedTradeKeys: action.supplier.trades,
@@ -638,8 +644,9 @@ type AppStateContextValue = {
   completeSetup: () => void;
   setLanguage: (language: string) => void;
   setPhone: (phone: string) => void;
-  requestOtp: (phone: string) => Promise<{ expires_in: number; dev_code?: string }>;
-  signIn: (phone: string, code: string) => Promise<ApiSupplier>;
+  setEmail: (email: string) => void;
+  requestOtp: (email: string) => Promise<{ expires_in: number; dev_code?: string }>;
+  signIn: (email: string, code: string) => Promise<ApiSupplier>;
   logout: () => Promise<void>;
   toggleTrade: (tradeKey: string) => void;
   toggleArea: (area: string) => void;
@@ -794,11 +801,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       completeSetup: () => dispatch({ type: "completeSetup" }),
       setLanguage: (language) => dispatch({ type: "setLanguage", language }),
       setPhone: (phone) => dispatch({ type: "setPhone", phone }),
-      requestOtp: (phone) => apiRequestOtp(phone),
-      signIn: async (phone, code) => {
-        const result = await apiVerifyOtp(phone, code);
+      setEmail: (email) => dispatch({ type: "setEmail", email }),
+      requestOtp: (email) => apiRequestOtp(email),
+      signIn: async (email, code) => {
+        const result = await apiVerifyOtp(email, code);
         dispatch({ type: "setSupplier", supplier: result.supplier });
-        dispatch({ type: "setPhone", phone: result.supplier.phone });
+        dispatch({ type: "setEmail", email: result.supplier.email ?? email });
         // Tie analytics to the authenticated supplier and record the login.
         identify(result.supplier.id);
         trackEvent("login", {});
