@@ -11,7 +11,9 @@ import { DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { I18nextProvider } from "react-i18next";
+import { View } from "react-native";
 import "react-native-reanimated";
+import { TestModeBadge } from "@/src/components/ui/TestModeBadge";
 import { i18n } from "@/src/i18n";
 import { AppStateProvider } from "@/src/state/AppState";
 import { theme } from "@/src/theme/tokens";
@@ -96,6 +98,7 @@ function RootLayout() {
         }}
       >
         <AppStateProvider>
+          <View style={{ flex: 1 }}>
           <Stack>
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             <Stack.Screen name="(setup)" options={{ headerShown: false }} />
@@ -115,6 +118,8 @@ function RootLayout() {
             <Stack.Screen name="profile-preview" options={{ headerShown: false }} />
             <Stack.Screen name="modal" options={{ presentation: "modal" }} />
           </Stack>
+          <TestModeBadge />
+          </View>
         </AppStateProvider>
       </ThemeProvider>
     </I18nextProvider>

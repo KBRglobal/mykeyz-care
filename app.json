@@ -12,6 +12,7 @@
       "buildNumber": "2",
       "supportsTablet": true,
       "associatedDomains": [
+        "applinks:care.mykeyz.io",
         "applinks:care.mykeyz.io"
       ],
       "infoPlist": {
@@ -33,9 +34,25 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
+        "android.permission.RECORD_AUDIO",
         "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "care.mykeyz.io",
+              "pathPrefix": "/job"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
         {
           "action": "VIEW",
           "autoVerify": true,
@@ -97,6 +114,12 @@
         "projectId": "9ccfaaf4-45c6-43c4-91fe-722f245821d6"
       }
     },
-    "owner": "kbr_global"
+    "owner": "kbr_global",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9ccfaaf4-45c6-43c4-91fe-722f245821d6"
+    }
   }
 }
