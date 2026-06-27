@@ -12,7 +12,6 @@
       "buildNumber": "2",
       "supportsTablet": true,
       "associatedDomains": [
-        "applinks:care.mykeyz.io",
         "applinks:care.mykeyz.io"
       ],
       "infoPlist": {
@@ -34,25 +33,9 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "care.mykeyz.io",
-              "pathPrefix": "/job"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
         {
           "action": "VIEW",
           "autoVerify": true,
