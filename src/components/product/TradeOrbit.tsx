@@ -1,7 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import { Home } from "lucide-react-native";
 import { AppText } from "@/src/components/ui/AppText";
-import { trades } from "@/src/data/mock";
+import { trades } from "@/src/data/catalog";
 import { theme } from "@/src/theme/tokens";
 
 export function TradeOrbit() {

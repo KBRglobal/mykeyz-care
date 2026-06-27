@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import { AppText } from "@/src/components/ui/AppText";
-import { setupSteps } from "@/src/data/mock";
+import { setupSteps } from "@/src/data/catalog";
 import { theme } from "@/src/theme/tokens";
 
 export function SetupProgress({ active }: { active: number }) {
