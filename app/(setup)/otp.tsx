@@ -25,7 +25,19 @@ export default function OtpScreen() {
   const inputs = useRef<Array<TextInput | null>>([]);
 
   const handleChange = (index: number, value: string) => {
-    const digit = value.replace(/\D/g, "").slice(-1);
+    const cleaned = value.replace(/\D/g, "");
+    // SMS autofill / paste can deliver the whole code into one field — distribute it across the cells.
+    if (cleaned.length > 1) {
+      setDigits((current) => {
+        const next = [...current];
+        for (let i = 0; i < 6; i += 1) next[i] = cleaned[i] ?? "";
+        return next;
+      });
+      const last = Math.min(cleaned.length, 6) - 1;
+      inputs.current[last]?.focus();
+      return;
+    }
+    const digit = cleaned.slice(-1);
     setDigits((current) => {
       const next = [...current];
       next[index] = digit;
@@ -69,7 +81,7 @@ export default function OtpScreen() {
         <View>
           <AppText variant="heading">Verification</AppText>
           <AppText color={theme.colors.mutedForeground}>
-            We sent a 6-digit code to {state.phone || "+971 50 123 4567"}.
+            We sent a 6-digit code to {state.phone}.
           </AppText>
         </View>
         <View style={styles.otp}>
@@ -83,7 +95,10 @@ export default function OtpScreen() {
               onChangeText={(text) => handleChange(index, text)}
               onKeyPress={({ nativeEvent }) => handleKeyPress(index, nativeEvent.key)}
               keyboardType="number-pad"
-              maxLength={1}
+              textContentType="oneTimeCode"
+              autoComplete="sms-otp"
+              importantForAutofill="yes"
+              maxLength={index === 0 ? 6 : 1}
               style={[styles.otpCell, { width: cellSize }, value ? styles.filled : null]}
             />
           ))}

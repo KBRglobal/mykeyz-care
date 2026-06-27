@@ -51,6 +51,8 @@ export default function PhoneScreen() {
           </View>
           <TextInput
             keyboardType="phone-pad"
+            textContentType="telephoneNumber"
+            autoComplete="tel"
             placeholder="5X XXX XXXX"
             placeholderTextColor="#D7E0EA"
             value={phone}
