@@ -17,14 +17,14 @@ main MyKeyz app (port `mykeyz/backend/src/services/sms.ts`); voice = manual-firs
 - [x] quote/[id].tsx — surface manual fields (price, message, work details, availability/available_date); voice optional
 - [x] verify: `npx tsc --noEmit` green; device run; commit+push per item
 
-## Run 2 — All Dubai vs Specific Areas
+## Run 2 — All Dubai vs Specific Areas  ✅ DONE+DEPLOYED
 - [x] backend: `covers_all_dubai` flag + matching wildcard + e2e; app: 2-option coverage selector
 
-## Run 3 — Real OTP delivery (Unifonic, like main app) + prod gates
-- [ ] port Unifonic SMS from mykeyz/backend/src/services/sms.ts into Care otp-delivery.ts SMS path
+## Run 3 — Real OTP delivery (Unifonic) ✅ CODE DONE+DEPLOYED (activation gated on Unifonic AppSid)
+- [x] port Unifonic SMS from mykeyz/backend/src/services/sms.ts into Care otp-delivery.ts SMS path
 - [ ] prod env: ALLOW_DEV_OTP=false, UNIFONIC_APP_SID/SENDER_ID (reuse main app creds if shared); strip dev bypass codes from prod build
 
-## Run 4 — Voice → text → translation (deferred)
+## Run 4 — Voice→text→translation — DEFERRED by Moshe (manual-first); needs STT/translation provider
 - [ ] make voice optional (done in Run 1); real STT + translation via backend proxy (mirror main MyKeyz)
 
 ## Run 5 — Push notifications + polish (optional for launch)
