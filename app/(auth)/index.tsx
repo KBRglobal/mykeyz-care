@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { ArrowRight, CheckCircle2, Languages, Send } from "lucide-react-native";
+import { ArrowRight, CheckCircle2, Languages, Target } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { TradeOrbit } from "@/src/components/product/TradeOrbit";
 import { AppText } from "@/src/components/ui/AppText";
@@ -11,7 +11,7 @@ import { Card } from "@/src/components/ui/Card";
 import { ProgressDots } from "@/src/components/ui/ProgressDots";
 import { Screen } from "@/src/components/ui/Screen";
 import { supportedLanguages } from "@/src/i18n";
-import { useAppState, type ProviderJob } from "@/src/state/AppState";
+import { useAppState } from "@/src/state/AppState";
 import { theme } from "@/src/theme/tokens";
 
 const slides = ["work", "fit", "language"] as const;
@@ -66,7 +66,7 @@ export default function WelcomeScreen() {
 
       <View style={styles.hero}>
         {slide === "work" ? <TradeOrbit /> : null}
-        {slide === "fit" ? <MatchingPreview jobs={state.jobs} /> : null}
+        {slide === "fit" ? <MatchingPreview /> : null}
         {slide === "language" ? <LanguagePreview /> : null}
       </View>
 
@@ -93,76 +93,39 @@ export default function WelcomeScreen() {
   );
 }
 
-function MatchingPreview({ jobs }: { jobs: ProviderJob[] }) {
+// Honest feature explainer — no sample jobs/prices. Real matched jobs appear in-app after sign-in.
+function MatchingPreview() {
   return (
     <View style={styles.fitStack}>
-      <View style={styles.filterRow}>
-        <AppText style={styles.chipDark}>Painting</AppText>
-        <AppText style={styles.chipDark}>Dubai Marina</AppText>
-        <AppText style={styles.chipGold}>Crack</AppText>
-      </View>
-      {jobs.map((item, itemIndex) => {
-        const Icon = item.icon;
-        return (
-          <Card key={item.id} muted style={[styles.matchCard, itemIndex > 0 ? styles.softMatch : null]}>
-            <View style={styles.matchIcon}>
-              <Icon color={itemIndex === 0 ? theme.colors.accent : theme.colors.mutedForeground} size={22} />
-            </View>
-            <View style={styles.matchCopy}>
-              <AppText variant="eyebrow">{item.trade}</AppText>
-              <AppText variant="label" style={styles.matchTitle}>
-                {item.title}
-              </AppText>
-            </View>
-            {itemIndex === 0 ? (
-              <CheckCircle2 color={theme.colors.success} fill={theme.colors.success} size={22} />
-            ) : null}
-          </Card>
-        );
-      })}
+      <Card muted style={styles.matchCard}>
+        <View style={styles.matchIcon}>
+          <Target color={theme.colors.accent} size={22} />
+        </View>
+        <View style={styles.matchCopy}>
+          <AppText variant="eyebrow">Matched to you</AppText>
+          <AppText variant="label" style={styles.matchTitle}>
+            Your trades & areas
+          </AppText>
+        </View>
+        <CheckCircle2 color={theme.colors.success} fill={theme.colors.success} size={22} />
+      </Card>
+      <AppText align="center" color={theme.colors.mutedForeground}>
+        Only jobs that fit your trades and service areas reach you — no noise.
+      </AppText>
     </View>
   );
 }
 
+// Honest feature explainer for two-way translation — no sample conversation or prices.
 function LanguagePreview() {
   return (
     <View style={styles.languageStack}>
-      <Card muted style={styles.quoteCard}>
-        <View style={styles.quoteHeader}>
-          <View style={styles.whatsapp}>
-            <Send color={theme.colors.primaryForeground} size={18} fill={theme.colors.primaryForeground} />
-          </View>
-          <AppText variant="label" style={styles.greenText}>
-            New quote sent
-          </AppText>
-        </View>
-        <View style={styles.priceRow}>
-          <AppText style={styles.priceSoft}>AED 500</AppText>
-          <View style={styles.priceSelected}>
-            <AppText variant="label">AED 420</AppText>
-          </View>
-          <AppText style={styles.priceSoft}>AED 350</AppText>
-        </View>
-        <AppText variant="eyebrow" align="center" color={theme.colors.accent}>
-          Customer chooses you
-        </AppText>
-      </Card>
       <Card muted style={styles.translationCard}>
-        <View style={styles.bubbleDark}>
-          <AppText variant="label" color={theme.colors.primaryForeground}>
-            नमस्ते, मैं काम कर सकता हूँ
-          </AppText>
-        </View>
-        <ArrowRight color={theme.colors.mutedForeground} size={18} />
-        <View style={styles.bubbleLight}>
-          <AppText variant="label">Hello, I can do the job</AppText>
-        </View>
-        <View style={styles.translationFooter}>
-          <Languages color={theme.colors.accent} size={16} />
-          <AppText variant="eyebrow" color={theme.colors.accent}>
-            Auto-translation active
-          </AppText>
-        </View>
+        <Languages color={theme.colors.accent} size={30} />
+        <AppText align="center" color={theme.colors.mutedForeground}>
+          Chat with customers in your own language — messages are translated both
+          ways automatically, so nothing gets lost.
+        </AppText>
       </Card>
     </View>
   );
@@ -290,11 +253,10 @@ const styles = StyleSheet.create({
   },
   translationCard: {
     alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+    flexDirection: "column",
+    gap: 14,
     justifyContent: "center",
-    padding: 20,
+    padding: 24,
   },
   bubbleDark: {
     backgroundColor: theme.colors.primary,
