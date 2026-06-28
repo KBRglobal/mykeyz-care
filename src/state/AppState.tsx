@@ -41,6 +41,7 @@ import {
   type RevealWallet,
   type Entitlement,
 } from "@/src/services/api";
+import { purchase as iapPurchase, finishPurchase as iapFinishPurchase } from "@/src/services/iap";
 
 const STORAGE_KEY = "mykeyz-care-state-v1";
 
@@ -70,47 +71,6 @@ export type RevealOutcome =
 
 /** Result of an IAP purchase (plan or single-reveal) validated server-side. */
 export type PurchaseOutcome = { ok: true; entitlement: Entitlement } | { ok: false; error: string };
-
-// --- Dev store stub (Sprint 9) -------------------------------------------------------
-// The real store purchase (expo-iap) is not yet wired. Until it is, we build a dev-stub
-// signed transaction the Sprint 9 server accepts (base64url header.payload.sig), so the
-// store -> validate -> apply -> refetch path runs end to end. The SERVER still decides
-// every benefit — this only stands in for the native store handing back a receipt.
-
-const B64URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
-function base64UrlJson(value: unknown): string {
-  const text = JSON.stringify(value);
-  let output = "";
-  for (let index = 0; index < text.length; index += 3) {
-    const a = text.charCodeAt(index);
-    const hasB = index + 1 < text.length;
-    const hasC = index + 2 < text.length;
-    const b = hasB ? text.charCodeAt(index + 1) : 0;
-    const c = hasC ? text.charCodeAt(index + 2) : 0;
-    output += B64URL_ALPHABET[a >> 2];
-    output += B64URL_ALPHABET[((a & 3) << 4) | (b >> 4)];
-    output += hasB ? B64URL_ALPHABET[((b & 15) << 2) | (c >> 6)] : "";
-    output += hasC ? B64URL_ALPHABET[c & 63] : "";
-  }
-  return output;
-}
-
-/**
- * TODO(store): replace with the real expo-iap purchase result. On a production build this
- * is where we present the App Store sheet and read back the signed transaction JWS, then
- * pass THAT to submitApplePurchase. The dev stub keeps each transaction id unique so the
- * server records a real (non-replay) purchase every tap.
- */
-function buildStubAppleTransaction(productId: string): string {
-  const header = base64UrlJson({ alg: "ES256" });
-  const payload = base64UrlJson({
-    originalTransactionId: `dev-${productId}-${Date.now()}`,
-    productId,
-    expiresDate: null,
-  });
-  return `${header}.${payload}.sig`;
-}
 
 export type QuoteStatus = "draft" | "sent" | "won" | "lost";
 
@@ -777,10 +737,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     async (productId: string): Promise<PurchaseOutcome> => {
       try {
         await ensureSession();
-        // TODO(store): swap this dev stub for the real expo-iap purchase result.
-        const signedTransaction = buildStubAppleTransaction(productId);
-        const result = await apiSubmitApplePurchase(signedTransaction);
+        // Real store purchase: present the native sheet, get the signed transaction (iOS JWS),
+        // and submit THAT for server-side verification. The server applies every benefit.
+        const purchase = await iapPurchase(productId);
+        if (!purchase.ok) return { ok: false, error: purchase.error };
+        const result = await apiSubmitApplePurchase(purchase.token);
         if (!result.ok) return { ok: false, error: result.error };
+        // Settle the StoreKit transaction only after the server accepted it.
+        await iapFinishPurchase(productId);
         dispatch({ type: "setEntitlement", entitlement: result.entitlement });
         await refreshWallet();
         trackEvent("iap_purchase_validated", { productId });
