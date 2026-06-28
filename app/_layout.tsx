@@ -116,7 +116,6 @@ function RootLayout() {
             <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
             <Stack.Screen name="job-complete" options={{ headerShown: false }} />
             <Stack.Screen name="profile-preview" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: "modal" }} />
           </Stack>
           <TestModeBadge />
           </View>

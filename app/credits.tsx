@@ -38,14 +38,14 @@ export default function CreditsScreen() {
         <Card style={styles.proPack}>
           <View>
             <AppText variant="eyebrow" color={theme.colors.accent}>
-              Pro pack
+              Single reveal
             </AppText>
             <AppText variant="title" color={theme.colors.primaryForeground}>
               1 Reveal
             </AppText>
           </View>
-          <AppText variant="title" color={theme.colors.primaryForeground}>
-            AED 49
+          <AppText variant="eyebrow" color="#CBD5E1">
+            Price shown at checkout
           </AppText>
         </Card>
         <Pressable onPress={() => router.push("/plans")}>

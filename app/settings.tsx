@@ -1,40 +1,79 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Bell, Building2, CalendarClock, ChevronRight, Languages, LogOut, MapPin, SlidersHorizontal, TrendingUp } from "lucide-react-native";
+import { Bell, Building2, CalendarClock, ChevronRight, Languages, LogOut, MapPin, SlidersHorizontal, TrendingUp, User } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { AppText } from "@/src/components/ui/AppText";
 import { BackHeader } from "@/src/components/ui/BackHeader";
 import { Card } from "@/src/components/ui/Card";
 import { Screen } from "@/src/components/ui/Screen";
+import { supportedLanguages } from "@/src/i18n";
 import { useAppState } from "@/src/state/AppState";
 import { theme } from "@/src/theme/tokens";
 
-const rows = [
-  { label: "Trade License", icon: Building2, route: "/(setup)/license", meta: "" },
-  { label: "Service Areas", icon: MapPin, route: "/(setup)/coverage", meta: "6 areas" },
-  { label: "Availability", icon: CalendarClock, route: "/availability", meta: "Calendar" },
-  { label: "Performance", icon: TrendingUp, route: "/performance", meta: "Weekly" },
-  { label: "Language", icon: Languages, route: "/(setup)/phone", meta: "English" },
-  { label: "Push Alerts", icon: Bell, route: "/notifications", meta: "On" },
-] as const;
+const VERIFICATION_LABEL: Record<string, string> = {
+  approved: "Verified partner",
+  submitted: "Pending review",
+  needs_changes: "Needs changes",
+  rejected: "Not approved",
+  suspended: "Suspended",
+  draft: "Not verified yet",
+};
 
 export default function SettingsScreen() {
-  const { state, resetApp, toggleSimpleMode, logout } = useAppState();
+  const { i18n } = useTranslation();
+  const { state, resetApp, toggleSimpleMode, logout, setLanguage } = useAppState();
   const { provider } = state;
+
+  // All meta values are derived from real state — never hardcoded.
+  const initials = provider.name
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  const isApproved = state.verificationStatus === "approved";
+  const areasMeta = state.coversAllDubai
+    ? "All Dubai"
+    : state.selectedAreas.length
+      ? `${state.selectedAreas.length} area${state.selectedAreas.length > 1 ? "s" : ""}`
+      : "Not set";
+  const langMeta = supportedLanguages.find((l) => l.code === i18n.language)?.label ?? "English";
+
+  const cycleLanguage = () => {
+    const current = supportedLanguages.findIndex((l) => l.code === i18n.language);
+    const next = supportedLanguages[(current + 1) % supportedLanguages.length];
+    i18n.changeLanguage(next.code);
+    setLanguage(next.code);
+  };
+
+  const rows = [
+    { label: "Trade License", icon: Building2, meta: state.tradeLicenseNumber || "Not set", onPress: () => router.push("/(setup)/license") },
+    { label: "Service Areas", icon: MapPin, meta: areasMeta, onPress: () => router.push("/(setup)/coverage") },
+    { label: "Availability", icon: CalendarClock, meta: "Calendar", onPress: () => router.push("/availability") },
+    { label: "Performance", icon: TrendingUp, meta: "Weekly", onPress: () => router.push("/performance") },
+    { label: "Language", icon: Languages, meta: langMeta, onPress: cycleLanguage },
+    { label: "Notifications", icon: Bell, meta: "", onPress: () => router.push("/notifications") },
+  ] as const;
 
   return (
     <Screen>
       <BackHeader />
       <View style={styles.profile}>
         <View style={styles.avatar}>
-          <AppText variant="title" color={theme.colors.primaryForeground}>
-            AR
-          </AppText>
+          {initials ? (
+            <AppText variant="title" color={theme.colors.primaryForeground}>
+              {initials}
+            </AppText>
+          ) : (
+            <User color={theme.colors.primaryForeground} size={26} />
+          )}
         </View>
         <View>
-          <AppText variant="title">{provider.name}</AppText>
+          <AppText variant="title">{provider.name || "Your profile"}</AppText>
           <View style={styles.badge}>
-            <AppText variant="eyebrow" color={theme.colors.success}>
-              Verified partner
+            <AppText variant="eyebrow" color={isApproved ? theme.colors.success : theme.colors.mutedForeground}>
+              {VERIFICATION_LABEL[state.verificationStatus] ?? "Not verified yet"}
             </AppText>
           </View>
         </View>
@@ -56,7 +95,7 @@ export default function SettingsScreen() {
         {rows.map((row) => {
           const Icon = row.icon;
           return (
-            <Pressable key={row.label} onPress={() => router.push(row.route)}>
+            <Pressable key={row.label} onPress={row.onPress}>
               <Card muted style={styles.row}>
                 <View style={styles.left}>
                   <View style={styles.icon}>

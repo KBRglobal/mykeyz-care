@@ -1,6 +1,7 @@
+import { router } from "expo-router";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { BadgeCheck, Camera, Pencil, X } from "lucide-react-native";
+import { BadgeCheck, Camera, Clock3, Pencil } from "lucide-react-native";
 import { FormField } from "@/src/components/forms/FormField";
 import { AppText } from "@/src/components/ui/AppText";
 import { BackHeader } from "@/src/components/ui/BackHeader";
@@ -34,8 +35,8 @@ export default function EditProfileScreen() {
     <Screen>
       <View style={styles.top}>
         <BackHeader />
-        <AppText variant="eyebrow" color={theme.colors.accent}>
-          Save
+        <AppText variant="eyebrow" color={theme.colors.accent} onPress={() => router.back()}>
+          Done
         </AppText>
       </View>
       <View style={styles.identity}>
@@ -54,17 +55,24 @@ export default function EditProfileScreen() {
         <View style={styles.areaBlock}>
           <AppText variant="eyebrow">Coverage areas</AppText>
           <View style={styles.chips}>
-            {state.selectedAreas.map((area) => (
-              <View key={area} style={styles.chip}>
+            {state.coversAllDubai ? (
+              <View style={styles.chip}>
                 <AppText variant="eyebrow" color={theme.colors.primaryForeground}>
-                  {area}
+                  All Dubai
                 </AppText>
-                <X color={theme.colors.primaryForeground} size={12} />
               </View>
-            ))}
-            <View style={styles.addChip}>
-              <AppText variant="eyebrow">+ Add area</AppText>
-            </View>
+            ) : (
+              state.selectedAreas.map((area) => (
+                <View key={area} style={styles.chip}>
+                  <AppText variant="eyebrow" color={theme.colors.primaryForeground}>
+                    {area}
+                  </AppText>
+                </View>
+              ))
+            )}
+            <Pressable style={styles.addChip} onPress={() => router.push("/(setup)/coverage")}>
+              <AppText variant="eyebrow">Edit areas</AppText>
+            </Pressable>
           </View>
         </View>
         <View style={styles.areaBlock}>
@@ -92,23 +100,38 @@ export default function EditProfileScreen() {
         </View>
         <View style={styles.areaBlock}>
           <AppText variant="eyebrow">Verification status</AppText>
-          <Card muted style={styles.verified}>
-            <BadgeCheck color={theme.colors.success} fill={theme.colors.success} size={30} />
-            <View>
-              <AppText variant="label" color="#064E3B">
-                Verified Partner
-              </AppText>
-              <AppText variant="eyebrow" color="#047857">
-                Trade license valid until 2027
-              </AppText>
-            </View>
-          </Card>
+          {state.verificationStatus === "approved" ? (
+            <Card muted style={styles.verified}>
+              <BadgeCheck color={theme.colors.success} fill={theme.colors.success} size={30} />
+              <View>
+                <AppText variant="label" color="#064E3B">
+                  Verified partner
+                </AppText>
+                <AppText variant="eyebrow" color="#047857">
+                  License {state.tradeLicenseNumber || "on file"} approved
+                </AppText>
+              </View>
+            </Card>
+          ) : (
+            <Pressable onPress={() => router.push("/(setup)/license")}>
+              <Card muted style={styles.pending}>
+                <Clock3 color={theme.colors.mutedForeground} size={28} />
+                <View>
+                  <AppText variant="label">
+                    {state.verificationStatus === "submitted" ? "Pending review" : "Not verified yet"}
+                  </AppText>
+                  <AppText variant="eyebrow" color={theme.colors.mutedForeground}>
+                    {state.verificationStatus === "submitted"
+                      ? "We'll let you know once your license is reviewed."
+                      : "Add your trade license to get verified."}
+                  </AppText>
+                </View>
+              </Card>
+            </Pressable>
+          )}
         </View>
       </View>
-      <Button label="Save profile" />
-      <AppText variant="eyebrow" align="center" color={theme.colors.destructive} style={styles.delete}>
-        Deactivate account
-      </AppText>
+      <Button label="Done" onPress={() => router.back()} />
     </Screen>
   );
 }
@@ -210,7 +233,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
   },
-  delete: {
-    marginTop: 24,
+  pending: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
   },
 });

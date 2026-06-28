@@ -1,6 +1,6 @@
 import { router } from "expo-router";
-import { useRef, useState } from "react";
-import { StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
 import { BackHeader } from "@/src/components/ui/BackHeader";
 import { AppText } from "@/src/components/ui/AppText";
 import { Button } from "@/src/components/ui/Button";
@@ -16,13 +16,38 @@ const ERRORS: Record<string, string> = {
 
 export default function OtpScreen() {
   const { width } = useWindowDimensions();
-  const { state, signIn } = useAppState();
+  const { state, signIn, requestOtp } = useAppState();
   const contentWidth = Math.max(280, Math.min(width - theme.spacing.pageX * 2, 382));
   const cellSize = Math.floor((contentWidth - 5 * 8) / 6);
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState("");
   const [verifying, setVerifying] = useState(false);
+  const [seconds, setSeconds] = useState(45);
+  const [resending, setResending] = useState(false);
   const inputs = useRef<Array<TextInput | null>>([]);
+
+  // Real countdown to the resend gate; ticks every second and stops at 0.
+  useEffect(() => {
+    if (seconds <= 0) return;
+    const timer = setInterval(() => setSeconds((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [seconds]);
+
+  const handleResend = async () => {
+    if (resending || seconds > 0) return;
+    setResending(true);
+    setError("");
+    try {
+      await requestOtp(state.email);
+      setSeconds(45);
+    } catch {
+      setError("Could not resend the code. Try again.");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const mmss = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 
   const handleChange = (index: number, value: string) => {
     const cleaned = value.replace(/\D/g, "");
@@ -105,9 +130,17 @@ export default function OtpScreen() {
         </View>
         {error ? <AppText color={theme.colors.destructive}>{error}</AppText> : null}
         <Button label={verifying ? "Verifying..." : "Verify code"} onPress={handleVerify} />
-        <AppText variant="eyebrow" align="center">
-          Resend code in 00:45
-        </AppText>
+        {seconds > 0 ? (
+          <AppText variant="eyebrow" align="center" color={theme.colors.mutedForeground}>
+            Resend code in {mmss}
+          </AppText>
+        ) : (
+          <Pressable onPress={handleResend} disabled={resending}>
+            <AppText variant="eyebrow" align="center" color={theme.colors.accent}>
+              {resending ? "Resending..." : "Resend code"}
+            </AppText>
+          </Pressable>
+        )}
       </View>
     </Screen>
   );

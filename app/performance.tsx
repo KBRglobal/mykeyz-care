@@ -13,6 +13,15 @@ export default function PerformanceScreen() {
   // Server-authoritative reveal usage; fall back to this session's list before the wallet loads.
   const viewed = state.wallet ? state.wallet.debited_total : state.revealedJobIds.length;
   const winRate = state.quotesSent ? Math.round((state.completedJobs / state.quotesSent) * 100) : 0;
+  const availabilityCount = Object.values(state.availability).reduce((sum, slots) => sum + slots.length, 0);
+  // A real, state-driven recommendation — never a hardcoded tip.
+  const nextAction = state.verificationStatus !== "approved"
+    ? "Complete verification — you can send quotes once you're approved."
+    : availabilityCount === 0
+      ? "Add your availability so customers can pick a time that works."
+      : state.quotesSent === 0
+        ? "Send your first quote on a matched job to start winning work."
+        : "Keep your availability current and reply quickly to win more jobs.";
   const metrics = [
     { label: "Quotes sent", value: state.quotesSent, icon: MessageSquareText, tone: theme.colors.info },
     { label: "Jobs active", value: active, icon: Target, tone: theme.colors.primary },
@@ -34,10 +43,12 @@ export default function PerformanceScreen() {
           <TrendingUp color={theme.colors.primaryForeground} size={30} />
         </View>
         <View style={styles.rankCopy}>
-          <AppText variant="eyebrow">Provider ranking</AppText>
-          <AppText variant="title">Top 18%</AppText>
+          <AppText variant="eyebrow">Jobs completed</AppText>
+          <AppText variant="title">{state.completedJobs}</AppText>
           <AppText color={theme.colors.mutedForeground}>
-            You are above most providers in your selected service areas.
+            {state.completedJobs === 0
+              ? "Win and complete your first job to start building your record."
+              : `AED ${Math.round(state.totalEarned).toLocaleString()} earned via MyKeyz so far.`}
           </AppText>
         </View>
       </Card>
@@ -58,7 +69,7 @@ export default function PerformanceScreen() {
       <Card muted style={styles.next}>
         <AppText variant="label">Next best action</AppText>
         <AppText color={theme.colors.mutedForeground}>
-          Add availability for tomorrow morning and send one more quote below AED 420 to compete for near jobs.
+          {nextAction}
         </AppText>
       </Card>
     </Screen>
