@@ -1,3 +1,4 @@
+import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
@@ -71,6 +72,24 @@ export default function OtpScreen() {
     if (digit && index < 5) inputs.current[index + 1]?.focus();
   };
 
+  // Paste the code from the clipboard (codes arrive by email, so iOS SMS-autofill doesn't help here).
+  // Pulls the first 6 digits out of whatever was copied and distributes them across the cells.
+  const handlePaste = async () => {
+    setError("");
+    const raw = await Clipboard.getStringAsync().catch(() => "");
+    const cleaned = (raw ?? "").replace(/\D/g, "").slice(0, 6);
+    if (!cleaned) {
+      setError("No code found on the clipboard");
+      return;
+    }
+    setDigits(() => {
+      const next = ["", "", "", "", "", ""];
+      for (let i = 0; i < cleaned.length; i += 1) next[i] = cleaned[i];
+      return next;
+    });
+    inputs.current[Math.min(cleaned.length, 6) - 1]?.focus();
+  };
+
   const handleKeyPress = (index: number, key: string) => {
     if (key === "Backspace" && !digits[index] && index > 0) {
       inputs.current[index - 1]?.focus();
@@ -108,6 +127,16 @@ export default function OtpScreen() {
           <AppText color={theme.colors.mutedForeground}>
             We sent a 6-digit code to {state.email}.
           </AppText>
+        </View>
+        <View style={styles.codeRow}>
+          <AppText variant="eyebrow" color={theme.colors.mutedForeground}>
+            Enter the 6-digit code
+          </AppText>
+          <Pressable onPress={handlePaste} hitSlop={8} accessibilityRole="button" accessibilityLabel="Paste code">
+            <AppText variant="eyebrow" color={theme.colors.accent}>
+              Paste
+            </AppText>
+          </Pressable>
         </View>
         <View style={styles.otp}>
           {digits.map((value, index) => (
@@ -153,6 +182,13 @@ const styles = StyleSheet.create({
   body: {
     gap: 32,
     width: "100%",
+  },
+  codeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: -16,
   },
   otp: {
     flexDirection: "row",
