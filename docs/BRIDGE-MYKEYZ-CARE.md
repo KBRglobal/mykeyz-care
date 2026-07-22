@@ -190,7 +190,15 @@ Content-Type: application/json
 
 - `<hex>` = `HMAC-SHA256(key = MYKEYZ_CARE_WEBHOOK_SECRET, message = rawBody)`.
 - Fired only for jobs that have an `external_ref` (i.e. jobs that came from MyKeyz).
-- Triggers: `quote.submitted`, `quote.edited`, `quote.withdrawn`, and `job.status` changes.
+- Triggers: `quote.submitted`, `quote.edited`, `quote.withdrawn`, and `job.status` changes —
+  `job_status: "assigned"` (on select, `index.ts` `/select`) and `job_status: "completed"`
+  (on supplier job-complete, `index.ts` `/jobs/:id/complete`). MyKeyz's `careWebhook.ts` also
+  has handling for `job_status: "cancelled"/"canceled"/"refunded"`, but Care has no job-cancel
+  action yet, so those are currently never sent — not a bug, just an unbuilt feature on the
+  Care side. Until 2026-07-23, `completed` was ALSO never sent (a real gap: the supplier-side
+  complete action updated Care's own `jobs.status` but never notified MyKeyz, so the bridged
+  lead never converted and its referring agent's commission was never credited) — fixed by
+  wiring `notifyMykeyz` into `completeSupplierJob`'s route handler.
 
 ### 4.2 Payload (`CareReturnEvent`)
 
