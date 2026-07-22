@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from "react";
 import { Home, type LucideIcon } from "lucide-react-native";
 import { trades } from "@/src/data/catalog";
@@ -21,6 +22,7 @@ import {
   getReveals as apiGetReveals,
   getEntitlement as apiGetEntitlement,
   submitApplePurchase as apiSubmitApplePurchase,
+  submitGooglePurchase as apiSubmitGooglePurchase,
   sendMessage as apiSendMessage,
   submitQuote,
   editQuote as apiEditQuote,
@@ -741,7 +743,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         // and submit THAT for server-side verification. The server applies every benefit.
         const purchase = await iapPurchase(productId);
         if (!purchase.ok) return { ok: false, error: purchase.error };
-        const result = await apiSubmitApplePurchase(purchase.token);
+        // Android's purchaseToken must validate against Google's endpoint (which also needs
+        // productId to look up the product), never Apple's — sending it to /iap/apple always
+        // fails invalid_receipt since it can't decode as an Apple signed JWS (#found-2026-07-23).
+        const result =
+          Platform.OS === "android"
+            ? await apiSubmitGooglePurchase(purchase.token, productId)
+            : await apiSubmitApplePurchase(purchase.token);
         if (!result.ok) return { ok: false, error: result.error };
         // Settle the StoreKit transaction only after the server accepted it.
         await iapFinishPurchase(productId);
