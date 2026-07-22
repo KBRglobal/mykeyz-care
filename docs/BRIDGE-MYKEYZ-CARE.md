@@ -264,6 +264,26 @@ Care runs `selectWinningQuote` with `actor_type = 'customer'` (fully audited) so
 selection is attributed to the MyKeyz customer, not to a Care operator. A `job.status`
 return webhook (`assigned`) follows.
 
+### 5.3 `POST /api/v1/ingest/jobs/by-ref/:external_ref/withdraw` — PDPL consent revocation
+
+Headers: `Authorization: Bearer` + `X-Care-Signature` (HMAC over raw body).
+
+Request: `{"reason":"consent_revoked"}`
+
+- `200 {"external_ref":"...", "status":"withdrawn"}`
+- `404 {"error":"not_found"}` — no job for that `external_ref` (nothing to withdraw).
+
+Called by `withdrawLeadFromCare()` (MyKeyz `backend/src/services/careBridge.ts`) when the
+tenant revokes consent for a lead already shared with Care. Idempotent. Care sets
+`jobs.status = 'withdrawn'` **and scrubs the tenant PII on the row** (`customer_name`,
+`customer_phone`, `location_address`, and each `job_findings.description`/`photo_url`) —
+not just a status flip — because a supplier already matched or quoted on the job can still
+call `GET /jobs/:id` afterward, and that response is not otherwise filtered by job status.
+MyKeyz treats `404` as "nothing to withdraw" (no PII was ever shipped, or it's already gone),
+so this endpoint must exist and return 404 rather than an unmatched-route 404 that looks the
+same but means something different — this was a real gap (endpoint missing entirely) closed
+2026-07-23; see `mykeyz-care-api/src/db.ts` `withdrawJobByExternalRef`.
+
 ---
 
 ## 6. Environment Variables (names only — values redacted)
@@ -361,6 +381,7 @@ in `_migrations`. Worth a separate SYSTEMS fix to the runner's splitter.
 | In | `POST /api/v1/ingest/jobs` | Bearer + HMAC | yes |
 | In | `GET /api/v1/ingest/jobs/by-ref/:ref` | Bearer | no |
 | In | `POST /api/v1/ingest/jobs/by-ref/:ref/select` | Bearer + HMAC | yes |
+| In | `POST /api/v1/ingest/jobs/by-ref/:ref/withdraw` | Bearer + HMAC | yes |
 | Out | `POST <MYKEYZ_CARE_WEBHOOK_URL>` | HMAC (`MYKEYZ_CARE_WEBHOOK_SECRET`) | yes |
 
 Join key: `external_ref` = MyKeyz service-lead id. Idempotent on re-ingest.

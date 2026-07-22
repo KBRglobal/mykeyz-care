@@ -207,6 +207,7 @@ Required backend capabilities:
 - Idempotency on `external_ref` (= MyKeyz service-lead id): re-ingest returns same job, no duplicate.
 - `GET /api/v1/ingest/jobs/by-ref/:ref` — snapshot (Bearer only).
 - `POST /api/v1/ingest/jobs/by-ref/:ref/select` — select winner as actor_type=customer (audited).
+- `POST /api/v1/ingest/jobs/by-ref/:ref/withdraw` — PDPL consent revocation: scrubs tenant PII on the job + its findings, 404 if no such job.
 - Outbound return webhook to `MYKEYZ_CARE_WEBHOOK_URL`, signed with `MYKEYZ_CARE_WEBHOOK_SECRET`, fire-and-forget, on quote.submitted/edited/withdrawn + job.status.
 - Constant-time signature compare; never send customer/supplier phone or any secret; only supplier quote amount crosses (Care → MyKeyz).
 
